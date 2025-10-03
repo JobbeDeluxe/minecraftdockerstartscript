@@ -5,23 +5,70 @@ set -euo pipefail
 
 # === Konfigurationsdatei für History ===
 HISTORY_FILE="${HOME}/.minecraft_script_history"
+HISTORY_LOCK="${HISTORY_FILE}.lock"
+
+ensure_history_storage() {
+    local history_dir
+    history_dir="$(dirname "$HISTORY_FILE")"
+    mkdir -p "$history_dir"
+    : > "$HISTORY_LOCK"
+}
 
 # ------------------------ History-Helpers ------------------------
 
 save_history() {
     local key="$1"
     local value="$2"
-    touch "$HISTORY_FILE"
-    grep -v "^${key}=" "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null || true
-    echo "${key}=${value}" >> "${HISTORY_FILE}.tmp"
-    mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
+    ensure_history_storage
+
+    local tmp_file
+    tmp_file="$(mktemp "${HISTORY_FILE}.XXXXXX")"
+
+    exec {lock_fd}>"$HISTORY_LOCK"
+    flock "$lock_fd"
+
+    if [[ -f "$HISTORY_FILE" ]]; then
+        grep -v "^${key}=" "$HISTORY_FILE" > "$tmp_file" 2>/dev/null || true
+    fi
+    printf '%s=%s\n' "$key" "$value" >> "$tmp_file"
+    mv "$tmp_file" "$HISTORY_FILE"
+
+    python3 - "$HISTORY_FILE" <<'PY' 2>/dev/null || true
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    fd = os.open(path, os.O_RDONLY)
+except OSError:
+    sys.exit(0)
+try:
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
+
+    flock -u "$lock_fd"
+    exec {lock_fd}>&-
 }
 
 load_history() {
     local key="$1"
+    ensure_history_storage
+
+    exec {lock_fd}<"$HISTORY_LOCK"
+    flock -s "$lock_fd"
+
     if [[ -f "$HISTORY_FILE" ]]; then
-        grep "^${key}=" "$HISTORY_FILE" | cut -d'=' -f2- | tail -1
+        local line
+        line=$(grep "^${key}=" "$HISTORY_FILE" | tail -1 2>/dev/null || true)
+        if [[ -n "${line:-}" ]]; then
+            echo "${line#*=}"
+        fi
     fi
+
+    flock -u "$lock_fd"
+    exec {lock_fd}<&-
 }
 
 read_with_history() {
@@ -99,7 +146,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 check_dependencies() {
-    local deps=("docker" "jq" "curl" "wget" "unzip" "sed" "awk")
+    local deps=("docker" "jq" "curl" "wget" "unzip" "sed" "awk" "python3")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" &>/dev/null; then
             log "Fehler: $dep ist nicht installiert."
@@ -294,6 +341,69 @@ modrinth_latest_jar_url() {
     return 1
 }
 
+# ------------------------ Spezial-Downloads ------------------------
+
+download_coreprotect_release_fallback() {
+    local out_path="$1"
+    local release_url
+
+    release_url="$(github_latest_jar_url "PlayPro/CoreProtect" || true)"
+    if [[ -n "${release_url:-}" && "$release_url" != "null" ]]; then
+        log "CoreProtect: Lade offizielle Release-JAR (GitHub API)..."
+        if download_file "$release_url" "$out_path"; then
+            log "ERFOLG: CoreProtect (Release-Fallback via GitHub)."
+            return 0
+        fi
+        log "FEHLER: CoreProtect-Release via GitHub API konnte nicht geladen werden."
+    fi
+
+    local direct_url="https://github.com/PlayPro/CoreProtect/releases/latest/download/CoreProtect.jar"
+    log "CoreProtect: Versuche direkten Release-Download..."
+    if download_file "$direct_url" "$out_path"; then
+        log "ERFOLG: CoreProtect (Release-Fallback Direktlink)."
+        return 0
+    fi
+
+    log "FEHLER: CoreProtect-Release konnte nicht heruntergeladen werden."
+    return 1
+}
+
+download_griefprevention_latest() {
+    local out_path="$1"
+
+    local murl
+    murl="$(modrinth_latest_jar_url "griefprevention" || true)"
+    if [[ -n "${murl:-}" && "$murl" != "null" ]]; then
+        log "GriefPrevention: Lade aktuelle Version von Modrinth..."
+        if download_file "$murl" "$out_path"; then
+            log "ERFOLG: GriefPrevention (Modrinth)."
+            return 0
+        fi
+        log "FEHLER: GriefPrevention konnte nicht über Modrinth geladen werden."
+    fi
+
+    local gh_url
+    gh_url="$(github_latest_jar_url "TechFortress/GriefPrevention" || true)"
+    if [[ -n "${gh_url:-}" && "$gh_url" != "null" ]]; then
+        log "GriefPrevention: Lade aktuelle Version von GitHub Releases..."
+        if download_file "$gh_url" "$out_path"; then
+            log "ERFOLG: GriefPrevention (GitHub Releases)."
+            return 0
+        fi
+        log "FEHLER: GriefPrevention konnte nicht über GitHub Releases geladen werden."
+    fi
+
+    local direct_url="https://github.com/TechFortress/GriefPrevention/releases/latest/download/GriefPrevention.jar"
+    log "GriefPrevention: Versuche direkten Release-Download..."
+    if download_file "$direct_url" "$out_path"; then
+        log "ERFOLG: GriefPrevention (Direkter Release-Download)."
+        return 0
+    fi
+
+    log "FEHLER: GriefPrevention konnte nicht heruntergeladen werden."
+    return 1
+}
+
 # ------------------------ CoreProtect Build (master + plugin.yml Patch) ------------------------
 
 # build_coreprotect_from_source <branch> <out_jar_path>
@@ -340,11 +450,49 @@ build_coreprotect_from_source() {
     srcdir="$(dirname "$srcdir")"                  # Projektwurzel
 
     log "CoreProtect: Baue Plugin (Maven, Tests übersprungen)..."
+    local build_log="$workdir/coreprotect_maven.log"
+    local build_ok=0
+    local maven_opts_append="-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true"
+
     if command -v mvn >/dev/null 2>&1; then
-        ( cd "$srcdir" && mvn -q -DskipTests package )
-    else
-        docker run --rm -v "$srcdir":/src -w /src maven:3.9-eclipse-temurin-21 mvn -q -DskipTests package
+        if ( cd "$srcdir" && MAVEN_OPTS="${MAVEN_OPTS:-} ${maven_opts_append}" mvn -B -q -DskipTests package ) &>"$build_log"; then
+            build_ok=1
+        else
+            log "CoreProtect: Lokaler Maven-Build fehlgeschlagen."
+        fi
     fi
+
+    if (( build_ok == 0 )); then
+        if command -v docker >/dev/null 2>&1; then
+            log "CoreProtect: Versuche Maven-Build per Docker-Fallback..."
+            if docker run --rm -v "$srcdir":/src -w /src \
+                -e MAVEN_OPTS="${MAVEN_OPTS:-} ${maven_opts_append}" \
+                maven:3.9-eclipse-temurin-21 mvn -B -q -DskipTests package &>"$build_log"; then
+                build_ok=1
+            else
+                log "CoreProtect: Docker-Maven-Build fehlgeschlagen."
+            fi
+        else
+            log "CoreProtect: Docker nicht verfügbar, kann Maven-Fallback nicht nutzen."
+        fi
+    fi
+
+    if (( build_ok == 0 )); then
+        if [[ -s "$build_log" ]]; then
+            log "--- Maven-Fehlerausgabe (letzte 20 Zeilen) ---"
+            tail -n 20 "$build_log" | while IFS= read -r line; do log "$line"; done
+            log "--- Ende Maven-Fehlerausgabe ---"
+        fi
+        log "CoreProtect: Build fehlgeschlagen – versuche Fallback auf offizielle Releases."
+        if download_coreprotect_release_fallback "$out_path"; then
+            rm -rf "$workdir"
+            return 0
+        fi
+        rm -rf "$workdir"
+        return 1
+    fi
+
+    rm -f "$build_log"
 
     built="$(find "$srcdir/target" -maxdepth 1 -type f -name 'CoreProtect-*.jar' | head -1)"
     if [[ -z "${built:-}" ]]; then
@@ -525,6 +673,17 @@ EOL
             fi
 
         else
+            if [[ "${plugin_name,,}" == "griefprevention" && "$plugin_url" == *"dev.bukkit.org"* ]]; then
+                if download_griefprevention_latest "$target"; then
+                    log "GriefPrevention: Fallback-Download erfolgreich."
+                    ok_list+=("$plugin_name")
+                else
+                    log "FEHLER: GriefPrevention konnte auch per Fallback nicht geladen werden."
+                    fail_list+=("$plugin_name")
+                fi
+                continue
+            fi
+
             # Fremdseite (z. B. Geyser/Floodgate) oder direkte Datei
             if download_file "$plugin_url" "$target"; then
                 log "ERFOLG: $plugin_name (Direktlink)"
@@ -604,10 +763,85 @@ restore_backup() {
     (( choice == 0 )) && log "Wiederherstellung abgebrochen." && return
     local index=$((choice - 1))
     [[ -z "${backups[$index]:-}" ]] && log "Ungültige Auswahl." && return
+    local backup_file="${backups[$index]}"
+
+    log "Prüfe Backup-Datei (${backup_file})..."
+    local total_entries
+    if ! total_entries=$(tar -tzf "$backup_file" | wc -l); then
+        log "Fehler: Backup-Datei konnte nicht gelesen werden." >&2
+        return 1
+    fi
+
+    log "Backup-Analyse: ${total_entries} enthaltene Einträge."
+
     stop_server
-    log "Stelle Backup wieder her: ${backups[$index]}"
+    log "Stelle Backup wieder her: ${backup_file}"
+
     rm -rf "$DATA_DIR/world"* "$PLUGIN_DIR"/*
-    tar -xzf "${backups[$index]}" -C "$DATA_DIR"
+
+    local restore_tmpdir fifo count_file
+    restore_tmpdir="$(mktemp -d)"
+    fifo="${restore_tmpdir}/restore_fifo"
+    count_file="${restore_tmpdir}/count"
+    mkfifo "$fifo"
+    : > "$count_file"
+
+    local start_time
+    start_time=$(date +%s)
+
+    (
+        local count=0
+        while IFS= read -r _; do
+            ((count++))
+            printf '%s\n' "$count" > "$count_file"
+        done < "$fifo"
+    ) &
+    local counter_pid=$!
+
+    (
+        if tar -xzvf "$backup_file" -C "$DATA_DIR" > "$fifo" 2> >(while IFS= read -r err; do log "tar: $err"; done); then
+            exit 0
+        else
+            exit 1
+        fi
+    ) &
+    local tar_pid=$!
+
+    while kill -0 "$tar_pid" 2>/dev/null; do
+        sleep 5
+        local now elapsed current_count=0 percent="-" eta_msg="unbekannt"
+        now=$(date +%s)
+        elapsed=$(( now - start_time ))
+        if [[ -s "$count_file" ]]; then
+            current_count=$(tail -n 1 "$count_file" 2>/dev/null || echo 0)
+        fi
+        if (( total_entries > 0 && current_count > 0 )); then
+            percent=$(( current_count * 100 / total_entries ))
+            local remaining eta_secs
+            remaining=$(( total_entries - current_count ))
+            eta_secs=$(( elapsed * remaining / current_count ))
+            local eta_formatted
+            eta_formatted=$(date -u -d "@${eta_secs}" '+%H:%M:%S' 2>/dev/null || echo "??:??:??")
+            eta_msg="~${eta_formatted}"
+        fi
+        log "Entpacke Backup... Fortschritt: ${percent}% (${current_count}/${total_entries}), verstrichene Zeit=${elapsed}s, geschätzte Restzeit=${eta_msg}"
+    done
+
+    local tar_status=0
+    if wait "$tar_pid"; then
+        tar_status=0
+    else
+        tar_status=$?
+    fi
+
+    wait "$counter_pid" 2>/dev/null || true
+    rm -rf "$restore_tmpdir"
+
+    if (( tar_status != 0 )); then
+        log "Fehler beim Entpacken des Backups." >&2
+        return 1
+    fi
+
     log "Wiederherstellung abgeschlossen."
 }
 
