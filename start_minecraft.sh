@@ -399,6 +399,15 @@ select_version_for_type() {
             return
         fi
 
+        local confirm_custom
+        confirm_custom=$(read_yesno_with_history "Die Auswahl '${chosen}' konnte nicht geprüft werden. Trotzdem verwenden?" "CONFIRM_VERSION_${type^^}")
+        if [[ "${confirm_custom,,}" == "ja" ]]; then
+            save_history "$history_key" "$chosen"
+            VERSION="$chosen"
+            log "Hinweis: Verwende benutzerdefinierte Version '${chosen}' ohne Validierung."
+            return
+        fi
+
         echo "Die Auswahl '${chosen}' ist nicht unter den verfügbaren Versionen. Bitte erneut wählen." >&2
     done
 }
@@ -440,6 +449,7 @@ DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecra
 
 # === Initialisierung nach DATA_DIR ===
 SERVER_NAME="mc"
+SERVER_NAME=$(read_with_history "Docker Container-Name" "$SERVER_NAME" "SERVER_NAME")
 BACKUP_DIR="${DATA_DIR}/backups"
 PLUGIN_DIR="${DATA_DIR}/plugins"
 PLUGIN_CONFIG="${DATA_DIR}/plugins.txt"
