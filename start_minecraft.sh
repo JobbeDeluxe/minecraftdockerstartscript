@@ -631,6 +631,9 @@ update_docker() {
         --restart always
     )
     [[ -n "${VERSION:-}" ]] && docker_args+=(-e "VERSION=$VERSION")
+    if [[ "${TYPE^^}" == "PAPER" && -n "${PAPER_CHANNEL:-}" ]]; then
+        docker_args+=(-e "PAPER_CHANNEL=$PAPER_CHANNEL")
+    fi
 
     if ! docker run "${docker_args[@]}" "$DOCKER_IMAGE"; then
         log "Fehler: Neuer Docker-Container konnte nicht gestartet werden." >&2
@@ -697,6 +700,13 @@ main() {
     VERSION=$(read_with_history "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?" "LATEST" "VERSION")
     MEMORY=$(read_with_history "Wieviel RAM (z. B. 6G, 8G)?" "6G" "MEMORY")
     TYPE=$(read_with_history "Welcher Server-Typ (PAPER, SPIGOT, VANILLA, ... )?" "PAPER" "TYPE")
+
+    PAPER_CHANNEL_DEFAULT="default"
+    if [[ "${TYPE^^}" == "PAPER" ]]; then
+        PAPER_CHANNEL=$(read_with_history "Welcher Paper-Channel (default oder experimental)?" "${PAPER_CHANNEL_DEFAULT}" "PAPER_CHANNEL")
+    else
+        PAPER_CHANNEL="$PAPER_CHANNEL_DEFAULT"
+    fi
 
     DO_BACKUP=$(read_yesno_with_history "Soll ein Backup erstellt werden?" "DO_BACKUP")
     DO_RESTORE=$(read_yesno_with_history "Soll ein Backup wiederhergestellt werden?" "DO_RESTORE")
