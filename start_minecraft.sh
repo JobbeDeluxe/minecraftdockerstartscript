@@ -371,11 +371,16 @@ select_version_for_type() {
     done
 
     while true; do
-        local selection
-        selection=$(select_with_history "$prompt" "$history_key" "${menu_versions[@]}") || {
+        local selection temp_file
+        temp_file="$(mktemp)"
+        if ! select_with_history "$prompt" "$history_key" "${menu_versions[@]}" >"$temp_file"; then
+            rm -f "$temp_file"
             echo "Version konnte nicht ausgewählt werden." >&2
             exit 1
-        }
+        fi
+
+        selection="$(<"$temp_file")"
+        rm -f "$temp_file"
 
         local chosen="$SELECT_WITH_HISTORY_RESULT"
 
@@ -391,7 +396,7 @@ select_version_for_type() {
         fi
 
         if [[ "${chosen^^}" == "${type^^}" ]]; then
-            echo "Die Eingabe entspricht dem Server-Typ '${type}'. Bitte geben Sie eine gültige Versionsnummer an." >&2
+            echo "Die Eingabe entspricht dem Server-Typ '${type}'. Bitte geben Sie eine Versionsnummer wie z. B. 1.21.1 an." >&2
             continue
         fi
 
@@ -1070,14 +1075,21 @@ EOL
         echo "Folgende Plugins konnten NICHT geladen/gebaut werden:"
         for p in "${fail_list[@]}"; do echo "  - $p"; done
         echo "---------------------------------------------"
-        local choice
+        local choice temp_file
         while true; do
-            choice=$(select_with_history \
+            temp_file="$(mktemp)"
+            if ! select_with_history \
                 "Wählen Sie, wie fortgefahren werden soll (Enter übernimmt die zuletzt genutzte Option)." \
                 "PLUGIN_FAILURE_ACTION" \
                 "Abbrechen (keine Änderungen an Plugins)" \
                 "Weiter: Server OHNE die fehlgeschlagenen Plugins starten (alte Plugins werden ersetzt)" \
-                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren") || choice=1
+                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren" \
+                >"$temp_file"; then
+                choice=1
+            else
+                choice="$(<"$temp_file")"
+            fi
+            rm -f "$temp_file"
 
             if [[ "$choice" == 0 ]]; then
                 echo "Benutzerdefinierte Eingaben werden in diesem Menü nicht unterstützt (${SELECT_WITH_HISTORY_RESULT:-})." >&2
