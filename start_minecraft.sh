@@ -312,7 +312,7 @@ select_version_for_type() {
     local count=0
     for v in "${all_versions[@]}"; do
         menu_versions+=("$v")
-        ((count++))
+        ((++count))
         if ((count >= limit)); then
             break
         fi
@@ -1066,7 +1066,7 @@ restore_backup() {
     (
         local count=0
         while IFS= read -r _; do
-            ((count++))
+            ((++count))
             printf '%s\n' "$count" > "$count_file"
         done < "$fifo"
     ) &
