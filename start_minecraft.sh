@@ -336,12 +336,17 @@ select_version_for_type() {
     local history_key="$2"
     local prompt="$3"
 
+    VERSION_CHANNEL_HINT=""
+    VERSION_SELECTION_SOURCE="manual"
+
     local versions_raw
     versions_raw=$(fetch_versions_for_type "$type" || true)
 
     if [[ -z "${versions_raw:-}" ]]; then
         echo "Es konnten keine Versionen für den Typ ${type} ermittelt werden. Bitte manuell eingeben." >&2
         VERSION=$(read_with_history "$prompt" "LATEST" "$history_key")
+        VERSION_SELECTION_SOURCE="manual"
+        VERSION_CHANNEL_HINT=""
         return
     fi
 
@@ -352,24 +357,28 @@ select_version_for_type() {
 
     if ((${#all_versions[@]} == 0)); then
         VERSION=$(read_with_history "$prompt" "LATEST" "$history_key")
+        VERSION_SELECTION_SOURCE="manual"
+        VERSION_CHANNEL_HINT=""
         return
     fi
 
     mapfile -t all_versions < <(printf '%s\n' "${all_versions[@]}" | sort -rV | uniq)
 
     local -a menu_versions=("LATEST")
+    local -a menu_channel_info=("")
     local limit=9
     local count=0
     for v in "${all_versions[@]}"; do
         local entry="$v"
+        local channel_summary=""
         if [[ "${type^^}" == "PAPER" ]]; then
-            local channel_summary
             if channel_summary=$(get_paper_version_channel_summary "$v" || true) && [[ -n "${channel_summary:-}" ]]; then
                 entry="${v}:::${v} (${channel_summary})"
             fi
         fi
 
         menu_versions+=("$entry")
+        menu_channel_info+=("$channel_summary")
         ((++count))
         if ((count >= limit)); then
             break
@@ -389,10 +398,19 @@ select_version_for_type() {
         rm -f "$temp_file"
 
         local chosen="$SELECT_WITH_HISTORY_RESULT"
+        local selection_source="manual"
+        local channel_hint=""
+
+        if [[ "$selection" =~ ^[0-9]+$ ]] && (( selection >= 1 && selection <= ${#menu_versions[@]} )); then
+            selection_source="menu"
+            channel_hint="${menu_channel_info[$((selection - 1))]:-}"
+        fi
 
         if [[ "$chosen" == "LATEST" ]]; then
             save_history "$history_key" "$chosen"
             VERSION="$chosen"
+            VERSION_SELECTION_SOURCE="$selection_source"
+            VERSION_CHANNEL_HINT="$channel_hint"
             return
         fi
 
@@ -417,6 +435,12 @@ select_version_for_type() {
         if ((valid)); then
             save_history "$history_key" "$chosen"
             VERSION="$chosen"
+            VERSION_SELECTION_SOURCE="$selection_source"
+            if [[ "$selection_source" == "menu" ]]; then
+                VERSION_CHANNEL_HINT="$channel_hint"
+            else
+                VERSION_CHANNEL_HINT=""
+            fi
             return
         fi
 
@@ -425,6 +449,8 @@ select_version_for_type() {
         if [[ "${confirm_custom,,}" == "ja" ]]; then
             save_history "$history_key" "$chosen"
             VERSION="$chosen"
+            VERSION_SELECTION_SOURCE="manual"
+            VERSION_CHANNEL_HINT=""
             log "Hinweis: Verwende benutzerdefinierte Version '${chosen}' ohne Validierung."
             return
         fi
@@ -470,15 +496,20 @@ prompt_host_port() {
     local last_value
     while true; do
         last_value=$(load_history "$history_key" || true)
-        if [[ -z "${last_value:-}" ]]; then
-            last_value="$default_port"
-        fi
 
-        printf "Welcher Host-Port soll für den Minecraft-Server verwendet werden? (Standard: %s): " "$last_value" >&2
+        if [[ -n "${last_value:-}" ]]; then
+            printf "Welcher Host-Port soll für den Minecraft-Server verwendet werden? (Standard: %s) [Letzte Eingabe: %s, Enter übernimmt letzte Eingabe]: " "$default_port" "$last_value" >&2
+        else
+            printf "Welcher Host-Port soll für den Minecraft-Server verwendet werden? (Standard: %s): " "$default_port" >&2
+        fi
         local input=""
         read -r input || input=""
         if [[ -z "${input:-}" ]]; then
-            input="$last_value"
+            if [[ -n "${last_value:-}" ]]; then
+                input="$last_value"
+            else
+                input="$default_port"
+            fi
         fi
 
         if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= 65535 )); then
@@ -611,6 +642,9 @@ DOCKER_IMAGE="itzg/minecraft-server"
 LOG_FILE="${DATA_DIR}/update_log.txt"
 HOST_PORT="25565"
 EXTRA_PORT_MAPPINGS=()
+VERSION=""
+VERSION_CHANNEL_HINT=""
+VERSION_SELECTION_SOURCE="manual"
 
 mkdir -p "$DATA_DIR"
 
@@ -1443,15 +1477,42 @@ main() {
 
     select_version_for_type "$TYPE" "VERSION" "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?"
 
-    prompt_host_port
-    prompt_additional_ports
-
     PAPER_CHANNEL_DEFAULT="default"
     if [[ "${TYPE^^}" == "PAPER" ]]; then
-        PAPER_CHANNEL=$(read_with_history "Welcher Paper-Channel (default oder experimental)?" "${PAPER_CHANNEL_DEFAULT}" "PAPER_CHANNEL")
+        local channel_prompt_needed="ja"
+        local auto_channel=""
+
+        if [[ "${VERSION_SELECTION_SOURCE:-manual}" == "menu" && -n "${VERSION_CHANNEL_HINT:-}" ]]; then
+            local -a _channel_parts=()
+            IFS=',' read -ra _channel_parts <<<"$VERSION_CHANNEL_HINT"
+            local -a cleaned_channels=()
+            for part in "${_channel_parts[@]}"; do
+                local trimmed="$part"
+                trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+                trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+                if [[ -n "$trimmed" ]]; then
+                    cleaned_channels+=("$trimmed")
+                fi
+            done
+            if (( ${#cleaned_channels[@]} == 1 )); then
+                auto_channel="${cleaned_channels[0]}"
+                channel_prompt_needed="nein"
+            fi
+        fi
+
+        if [[ "$channel_prompt_needed" == "nein" ]]; then
+            PAPER_CHANNEL="$auto_channel"
+            save_history "PAPER_CHANNEL" "$PAPER_CHANNEL"
+            log "Paper-Channel automatisch auf '${PAPER_CHANNEL}' gesetzt (basierend auf der Versionsauswahl)."
+        else
+            PAPER_CHANNEL=$(read_with_history "Welcher Paper-Channel (default oder experimental)?" "${PAPER_CHANNEL_DEFAULT}" "PAPER_CHANNEL")
+        fi
     else
         PAPER_CHANNEL="$PAPER_CHANNEL_DEFAULT"
     fi
+
+    prompt_host_port
+    prompt_additional_ports
 
     DO_BACKUP=$(read_yesno_with_history "Soll ein Backup erstellt werden?" "DO_BACKUP")
     DO_RESTORE=$(read_yesno_with_history "Soll ein Backup wiederhergestellt werden?" "DO_RESTORE")
