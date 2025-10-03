@@ -78,17 +78,23 @@ read_with_history() {
     local user_input last_value
     last_value=$(load_history "$history_key" || true)
 
-    if [[ -n "${last_value:-}" && "$last_value" != "$default" ]]; then
+    if [[ -n "${last_value:-}" ]]; then
         printf "%s [Letzte Eingabe: %s] (Standard: %s): " "$prompt" "$last_value" "$default" >&2
         read -r user_input || true
-        [[ -z "${user_input:-}" ]] && user_input="$last_value"
+        if [[ -z "${user_input:-}" ]]; then
+            if [[ -n "${last_value:-}" ]]; then
+                user_input="$last_value"
+            else
+                user_input="$default"
+            fi
+        fi
     else
         printf "%s (Standard: %s): " "$prompt" "$default" >&2
         read -r user_input || true
     fi
 
     [[ -z "${user_input:-}" ]] && user_input="$default"
-    if [[ "$user_input" != "$default" ]]; then
+    if [[ -n "$history_key" ]]; then
         save_history "$history_key" "$user_input"
     fi
     echo "$user_input"
@@ -371,11 +377,16 @@ select_version_for_type() {
     done
 
     while true; do
-        local selection
-        selection=$(select_with_history "$prompt" "$history_key" "${menu_versions[@]}") || {
+        local selection temp_file
+        temp_file="$(mktemp)"
+        if ! select_with_history "$prompt" "$history_key" "${menu_versions[@]}" >"$temp_file"; then
+            rm -f "$temp_file"
             echo "Version konnte nicht ausgewählt werden." >&2
             exit 1
-        }
+        fi
+
+        selection="$(<"$temp_file")"
+        rm -f "$temp_file"
 
         local chosen="$SELECT_WITH_HISTORY_RESULT"
 
@@ -391,7 +402,7 @@ select_version_for_type() {
         fi
 
         if [[ "${chosen^^}" == "${type^^}" ]]; then
-            echo "Die Eingabe entspricht dem Server-Typ '${type}'. Bitte geben Sie eine gültige Versionsnummer an." >&2
+            echo "Die Eingabe entspricht dem Server-Typ '${type}'. Bitte geben Sie eine Versionsnummer wie z. B. 1.21.1 an." >&2
             continue
         fi
 
@@ -480,6 +491,112 @@ prompt_host_port() {
     done
 }
 
+prompt_additional_ports() {
+    EXTRA_PORT_MAPPINGS=()
+
+    local enable_extra
+    enable_extra=$(read_yesno_with_history "Sollen zusätzliche Ports (z. B. 19132:19132/udp) freigegeben werden?" "EXTRA_PORTS_ENABLED")
+    if [[ "${enable_extra,,}" != "ja" ]]; then
+        return
+    fi
+
+    local history_key="EXTRA_PORTS_LIST"
+    local last_value
+    last_value=$(load_history "$history_key" || true)
+
+    while true; do
+        local input=""
+        local info_msg="Zusätzliche Ports im Format Host:Container[/Protokoll] (z. B. 19132:19132/udp). Mehrere Einträge durch Kommas oder Leerzeichen trennen. '-' löscht alle zusätzlichen Ports."
+        printf "%s\n" "$info_msg" >&2
+        if [[ -n "${last_value:-}" ]]; then
+            printf "Eingabe (Enter = %s): " "$last_value" >&2
+        else
+            printf "Eingabe (Enter = keine zusätzlichen Ports): " >&2
+        fi
+        read -r input || input=""
+
+        if [[ -z "${input:-}" ]]; then
+            input="$last_value"
+        fi
+
+        if [[ "${input:-}" == "-" ]]; then
+            save_history "$history_key" ""
+            EXTRA_PORT_MAPPINGS=()
+            return
+        fi
+
+        local condensed
+        condensed="${input//[[:space:],]/}"
+        if [[ -z "${condensed:-}" ]]; then
+            save_history "$history_key" ""
+            EXTRA_PORT_MAPPINGS=()
+            return
+        fi
+
+        local cleaned
+        cleaned=$(echo "$input" | tr ',' ' ')
+        local -a tokens=()
+        read -ra tokens <<< "$cleaned"
+
+        local -a parsed=()
+        local valid=1
+        local token
+        for token in "${tokens[@]}"; do
+            local entry="$token"
+            entry="${entry//[$'\t\r\n']/}"
+            [[ -z "${entry:-}" ]] && continue
+
+            local proto=""
+            if [[ "$entry" =~ /(tcp|udp)$ ]]; then
+                proto="/${BASH_REMATCH[1],,}"
+                entry="${entry%${BASH_REMATCH[0]}}"
+            fi
+
+            if [[ "$entry" != *:* ]]; then
+                echo "Ungültiges Port-Mapping '${token}'. Erwartet wird Host:Container[/Protokoll]." >&2
+                valid=0
+                break
+            fi
+
+            local host_port="${entry%%:*}"
+            local container_port="${entry#*:}"
+
+            if [[ -z "${host_port:-}" || -z "${container_port:-}" || ! "$host_port" =~ ^[0-9]+$ || ! "$container_port" =~ ^[0-9]+$ ]]; then
+                echo "Ungültiges Port-Mapping '${token}'. Host- und Container-Port müssen numerisch sein." >&2
+                valid=0
+                break
+            fi
+
+            if (( host_port < 1 || host_port > 65535 || container_port < 1 || container_port > 65535 )); then
+                echo "Ungültige Ports in '${token}'. Erlaubt sind Werte zwischen 1 und 65535." >&2
+                valid=0
+                break
+            fi
+
+            parsed+=("${host_port}:${container_port}${proto}")
+        done
+
+        if (( ! valid )); then
+            echo "Bitte die Eingaben prüfen und erneut versuchen." >&2
+            last_value="$input"
+            continue
+        fi
+
+        if (( ${#parsed[@]} == 0 )); then
+            save_history "$history_key" ""
+            EXTRA_PORT_MAPPINGS=()
+            return
+        fi
+
+        EXTRA_PORT_MAPPINGS=("${parsed[@]}")
+        local history_value
+        history_value=$(printf '%s,' "${EXTRA_PORT_MAPPINGS[@]}")
+        history_value="${history_value%,}"
+        save_history "$history_key" "$history_value"
+        return
+    done
+}
+
 # === Pfad abfragen (vor Log-Init) ===
 echo "=== Minecraft Server Management Script ===" >&2
 DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecraft_server" "DATA_DIR")
@@ -493,6 +610,7 @@ PLUGIN_CONFIG="${DATA_DIR}/plugins.txt"
 DOCKER_IMAGE="itzg/minecraft-server"
 LOG_FILE="${DATA_DIR}/update_log.txt"
 HOST_PORT="25565"
+EXTRA_PORT_MAPPINGS=()
 
 mkdir -p "$DATA_DIR"
 
@@ -1070,14 +1188,21 @@ EOL
         echo "Folgende Plugins konnten NICHT geladen/gebaut werden:"
         for p in "${fail_list[@]}"; do echo "  - $p"; done
         echo "---------------------------------------------"
-        local choice
+        local choice temp_file
         while true; do
-            choice=$(select_with_history \
+            temp_file="$(mktemp)"
+            if ! select_with_history \
                 "Wählen Sie, wie fortgefahren werden soll (Enter übernimmt die zuletzt genutzte Option)." \
                 "PLUGIN_FAILURE_ACTION" \
                 "Abbrechen (keine Änderungen an Plugins)" \
                 "Weiter: Server OHNE die fehlgeschlagenen Plugins starten (alte Plugins werden ersetzt)" \
-                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren") || choice=1
+                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren" \
+                >"$temp_file"; then
+                choice=1
+            else
+                choice="$(<"$temp_file")"
+            fi
+            rm -f "$temp_file"
 
             if [[ "$choice" == 0 ]]; then
                 echo "Benutzerdefinierte Eingaben werden in diesem Menü nicht unterstützt (${SELECT_WITH_HISTORY_RESULT:-})." >&2
@@ -1228,8 +1353,16 @@ update_docker() {
     local docker_args=(
         -d
         -p "${HOST_PORT}:25565"
-        -p 19132:19132/udp
-        -p 24454:24454/udp   # Simple Voice Chat UDP-Port
+    )
+
+    if (( ${#EXTRA_PORT_MAPPINGS[@]} > 0 )); then
+        local mapping
+        for mapping in "${EXTRA_PORT_MAPPINGS[@]}"; do
+            docker_args+=(-p "$mapping")
+        done
+    fi
+
+    docker_args+=(
         -v "${DATA_DIR}:/data"
         --name "$SERVER_NAME"
         -e TZ=Europe/Berlin
@@ -1311,6 +1444,7 @@ main() {
     select_version_for_type "$TYPE" "VERSION" "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?"
 
     prompt_host_port
+    prompt_additional_ports
 
     PAPER_CHANNEL_DEFAULT="default"
     if [[ "${TYPE^^}" == "PAPER" ]]; then
