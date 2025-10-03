@@ -99,13 +99,31 @@ select_with_history() {
     local history_key="$2"
     shift 2
 
-    local -a options=("$@")
-    if ((${#options[@]} == 0)); then
+    local -a raw_options=("$@")
+
+    local -a option_values=()
+    local -a option_displays=()
+
+    local opt value display
+    for opt in "${raw_options[@]}"; do
+        if [[ "$opt" == *":::"* ]]; then
+            value="${opt%%:::*}"
+            display="${opt#*:::}"
+            [[ -z "${display:-}" ]] && display="$value"
+        else
+            value="$opt"
+            display="$opt"
+        fi
+        option_values+=("$value")
+        option_displays+=("$display")
+    done
+
+    if ((${#option_values[@]} == 0)); then
         echo "select_with_history benötigt mindestens eine Option." >&2
         return 1
     fi
-    if ((${#options[@]} > 10)); then
-        echo "select_with_history unterstützt maximal 10 Optionen (übergeben: ${#options[@]})." >&2
+    if ((${#option_values[@]} > 10)); then
+        echo "select_with_history unterstützt maximal 10 Optionen (übergeben: ${#option_values[@]})." >&2
         return 1
     fi
 
@@ -122,8 +140,8 @@ select_with_history() {
     elif [[ "$raw_last" =~ ^[0-9]+$ ]]; then
         default_index="$raw_last"
     elif [[ -n "$raw_last" ]]; then
-        for i in "${!options[@]}"; do
-            if [[ "${options[$i]}" == "$raw_last" ]]; then
+        for i in "${!option_values[@]}"; do
+            if [[ "${option_values[$i]}" == "$raw_last" ]]; then
                 default_index=$(( i + 1 ))
                 break
             fi
@@ -134,7 +152,7 @@ select_with_history() {
     fi
 
     if [[ -n "$default_index" ]]; then
-        if (( default_index < 1 || default_index > ${#options[@]} )); then
+        if (( default_index < 1 || default_index > ${#option_values[@]} )); then
             default_index=""
         fi
     fi
@@ -147,13 +165,13 @@ select_with_history() {
 
     while true; do
         printf "%s\n" "$prompt" >&2
-        for i in "${!options[@]}"; do
+        for i in "${!option_values[@]}"; do
             local num=$(( i + 1 ))
             local marker=""
             if [[ -n "$default_index" && "$num" -eq "$default_index" ]]; then
                 marker=" [Standard]"
             fi
-            printf "  %d) %s%s\n" "$num" "${options[$i]}" "$marker" >&2
+            printf "  %d) %s%s\n" "$num" "${option_displays[$i]}" "$marker" >&2
         done
 
         local custom_label="Eigene Eingabe"
@@ -167,9 +185,9 @@ select_with_history() {
         if [[ -n "$default_custom" ]]; then
             default_desc="$default_custom"
         elif [[ -n "$default_index" ]]; then
-            default_desc="${options[$((default_index - 1))]}"
+            default_desc="${option_displays[$((default_index - 1))]}"
         else
-            default_desc="${options[0]}"
+            default_desc="${option_displays[0]}"
         fi
 
         printf "Auswahl (Enter = %s): " "$default_desc" >&2
@@ -199,9 +217,9 @@ select_with_history() {
             SELECT_WITH_HISTORY_RESULT="$custom_value"
             echo 0
             return 0
-        elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#option_values[@]} )); then
             save_history "$history_key" "INDEX:${choice}"
-            SELECT_WITH_HISTORY_RESULT="${options[$((choice - 1))]}"
+            SELECT_WITH_HISTORY_RESULT="${option_values[$((choice - 1))]}"
             echo "$choice"
             return 0
         else
@@ -281,6 +299,32 @@ fetch_versions_for_type() {
     echo "$resp" | jq -r "$jq_filter" 2>/dev/null | awk 'NF'
 }
 
+declare -A PAPER_VERSION_CHANNEL_CACHE=()
+
+get_paper_version_channel_summary() {
+    local version="$1"
+
+    if [[ -n "${PAPER_VERSION_CHANNEL_CACHE[$version]+_}" ]]; then
+        printf '%s\n' "${PAPER_VERSION_CHANNEL_CACHE[$version]}"
+        return 0
+    fi
+
+    local url resp
+    url="https://api.papermc.io/v2/projects/paper/versions/${version}/builds"
+    if ! resp=$(curl -sfL "$url" 2>/dev/null); then
+        return 1
+    fi
+
+    local summary
+    summary=$(echo "$resp" | jq -r '.builds[]?.channel' 2>/dev/null | awk 'NF' | sort -u | paste -sd ', ' -)
+    if [[ -z "${summary:-}" ]]; then
+        return 1
+    fi
+
+    PAPER_VERSION_CHANNEL_CACHE[$version]="$summary"
+    printf '%s\n' "$summary"
+}
+
 select_version_for_type() {
     local type="$1"
     local history_key="$2"
@@ -311,7 +355,15 @@ select_version_for_type() {
     local limit=9
     local count=0
     for v in "${all_versions[@]}"; do
-        menu_versions+=("$v")
+        local entry="$v"
+        if [[ "${type^^}" == "PAPER" ]]; then
+            local channel_summary
+            if channel_summary=$(get_paper_version_channel_summary "$v" || true) && [[ -n "${channel_summary:-}" ]]; then
+                entry="${v}:::${v} (${channel_summary})"
+            fi
+        fi
+
+        menu_versions+=("$entry")
         ((++count))
         if ((count >= limit)); then
             break
