@@ -94,6 +94,124 @@ read_with_history() {
     echo "$user_input"
 }
 
+select_with_history() {
+    local prompt="$1"
+    local history_key="$2"
+    shift 2
+
+    local -a options=("$@")
+    if ((${#options[@]} == 0)); then
+        echo "select_with_history benötigt mindestens eine Option." >&2
+        return 1
+    fi
+    if ((${#options[@]} > 10)); then
+        echo "select_with_history unterstützt maximal 10 Optionen (übergeben: ${#options[@]})." >&2
+        return 1
+    fi
+
+    local raw_last default_index="" default_custom=""
+    raw_last=$(load_history "$history_key" || true)
+
+    if [[ "$raw_last" == CUSTOM:* ]]; then
+        default_custom="${raw_last#CUSTOM:}"
+    elif [[ "$raw_last" == INDEX:* ]]; then
+        local idx="${raw_last#INDEX:}"
+        if [[ "$idx" =~ ^[0-9]+$ ]]; then
+            default_index="$idx"
+        fi
+    elif [[ "$raw_last" =~ ^[0-9]+$ ]]; then
+        default_index="$raw_last"
+    elif [[ -n "$raw_last" ]]; then
+        for i in "${!options[@]}"; do
+            if [[ "${options[$i]}" == "$raw_last" ]]; then
+                default_index=$(( i + 1 ))
+                break
+            fi
+        done
+        if [[ -z "$default_index" ]]; then
+            default_custom="$raw_last"
+        fi
+    fi
+
+    if [[ -n "$default_index" ]]; then
+        if (( default_index < 1 || default_index > ${#options[@]} )); then
+            default_index=""
+        fi
+    fi
+
+    if [[ -z "$default_index" && -z "$default_custom" ]]; then
+        default_index=1
+    fi
+
+    local choice="" custom_value=""
+
+    while true; do
+        printf "%s\n" "$prompt" >&2
+        for i in "${!options[@]}"; do
+            local num=$(( i + 1 ))
+            local marker=""
+            if [[ -n "$default_index" && "$num" -eq "$default_index" ]]; then
+                marker=" [Standard]"
+            fi
+            printf "  %d) %s%s\n" "$num" "${options[$i]}" "$marker" >&2
+        done
+
+        local custom_label="Eigene Eingabe"
+        if [[ -n "$default_custom" ]]; then
+            custom_label+=" (Letzte Eingabe: $default_custom)"
+            custom_label+=" [Standard]"
+        fi
+        printf "  0) %s\n" "$custom_label" >&2
+
+        local default_desc
+        if [[ -n "$default_custom" ]]; then
+            default_desc="$default_custom"
+        elif [[ -n "$default_index" ]]; then
+            default_desc="${options[$((default_index - 1))]}"
+        else
+            default_desc="${options[0]}"
+        fi
+
+        printf "Auswahl (Enter = %s): " "$default_desc" >&2
+        read -r choice || choice=""
+
+        if [[ -z "$choice" ]]; then
+            if [[ -n "$default_custom" ]]; then
+                choice=0
+                custom_value="$default_custom"
+            elif [[ -n "$default_index" ]]; then
+                choice="$default_index"
+            else
+                choice=1
+            fi
+        fi
+
+        if [[ "$choice" == 0 ]]; then
+            if [[ -z "$custom_value" ]]; then
+                printf "Bitte gewünschte Eingabe: " >&2
+                read -r custom_value || custom_value=""
+            fi
+            if [[ -z "$custom_value" ]]; then
+                echo "Keine Eingabe erhalten. Bitte erneut versuchen." >&2
+                continue
+            fi
+            save_history "$history_key" "CUSTOM:${custom_value}"
+            SELECT_WITH_HISTORY_RESULT="$custom_value"
+            echo 0
+            return 0
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
+            save_history "$history_key" "INDEX:${choice}"
+            SELECT_WITH_HISTORY_RESULT="${options[$((choice - 1))]}"
+            echo "$choice"
+            return 0
+        else
+            echo "Ungültige Auswahl: $choice" >&2
+        fi
+
+        custom_value=""
+    done
+}
+
 read_yesno_with_history() {
     local prompt="$1"
     local history_key="$2"
@@ -117,6 +235,120 @@ read_yesno_with_history() {
 
     save_history "$history_key" "$user_input"
     echo "$user_input"
+}
+
+map_type_to_version_endpoint() {
+    local type_upper="${1^^}"
+    case "$type_upper" in
+        PAPER|FOLIA)
+            local slug
+            slug="$(echo "$type_upper" | tr '[:upper:]' '[:lower:]')"
+            printf '%s\n' "papermc:https://api.papermc.io/v2/projects/${slug}"
+            return 0
+            ;;
+        PURPUR)
+            printf '%s\n' "purpur:https://api.purpurmc.org/v2/purpur"
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+fetch_versions_for_type() {
+    local type="$1"
+    local mapping
+    mapping=$(map_type_to_version_endpoint "$type" || true)
+    if [[ -z "${mapping:-}" ]]; then
+        return 1
+    fi
+
+    local provider="${mapping%%:*}"
+    local url="${mapping#*:}"
+    local resp
+    if ! resp=$(curl -sfL "$url"); then
+        return 1
+    fi
+
+    local jq_filter
+    case "$provider" in
+        papermc) jq_filter='.versions[]?' ;;
+        purpur)  jq_filter='.versions[]?' ;;
+        *)       return 1 ;;
+    esac
+
+    echo "$resp" | jq -r "$jq_filter" 2>/dev/null | awk 'NF'
+}
+
+select_version_for_type() {
+    local type="$1"
+    local history_key="$2"
+    local prompt="$3"
+
+    local versions_raw
+    versions_raw=$(fetch_versions_for_type "$type" || true)
+
+    if [[ -z "${versions_raw:-}" ]]; then
+        echo "Es konnten keine Versionen für den Typ ${type} ermittelt werden. Bitte manuell eingeben." >&2
+        VERSION=$(read_with_history "$prompt" "LATEST" "$history_key")
+        return
+    fi
+
+    local -a all_versions=()
+    while IFS= read -r version; do
+        all_versions+=("$version")
+    done <<<"$versions_raw"
+
+    if ((${#all_versions[@]} == 0)); then
+        VERSION=$(read_with_history "$prompt" "LATEST" "$history_key")
+        return
+    fi
+
+    mapfile -t all_versions < <(printf '%s\n' "${all_versions[@]}" | sort -rV | uniq)
+
+    local -a menu_versions=("LATEST")
+    local limit=9
+    local count=0
+    for v in "${all_versions[@]}"; do
+        menu_versions+=("$v")
+        ((count++))
+        if ((count >= limit)); then
+            break
+        fi
+    done
+
+    while true; do
+        local selection
+        selection=$(select_with_history "$prompt" "$history_key" "${menu_versions[@]}") || {
+            echo "Version konnte nicht ausgewählt werden." >&2
+            exit 1
+        }
+
+        local chosen="$SELECT_WITH_HISTORY_RESULT"
+
+        if [[ "$chosen" == "LATEST" ]]; then
+            save_history "$history_key" "$chosen"
+            VERSION="$chosen"
+            return
+        fi
+
+        local valid=0
+        for v in "${all_versions[@]}"; do
+            if [[ "$v" == "$chosen" ]]; then
+                valid=1
+                break
+            fi
+        done
+
+        if ((valid)); then
+            save_history "$history_key" "$chosen"
+            VERSION="$chosen"
+            return
+        fi
+
+        echo "Die Auswahl '${chosen}' ist nicht unter den verfügbaren Versionen. Bitte erneut wählen." >&2
+    done
 }
 
 # === Pfad abfragen (vor Log-Init) ===
@@ -707,11 +939,22 @@ EOL
         echo "Folgende Plugins konnten NICHT geladen/gebaut werden:"
         for p in "${fail_list[@]}"; do echo "  - $p"; done
         echo "---------------------------------------------"
-        echo "Wählen Sie, wie fortgefahren werden soll:"
-        echo "  1) Abbrechen (keine Änderungen an Plugins)"
-        echo "  2) Weiter: Server OHNE die fehlgeschlagenen Plugins starten (alte Plugins werden ersetzt)"
-        echo "  3) Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren"
-        read -r -p "Ihre Wahl [1/2/3]: " choice
+        local choice
+        while true; do
+            choice=$(select_with_history \
+                "Wählen Sie, wie fortgefahren werden soll (Enter übernimmt die zuletzt genutzte Option)." \
+                "PLUGIN_FAILURE_ACTION" \
+                "Abbrechen (keine Änderungen an Plugins)" \
+                "Weiter: Server OHNE die fehlgeschlagenen Plugins starten (alte Plugins werden ersetzt)" \
+                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren") || choice=1
+
+            if [[ "$choice" == 0 ]]; then
+                echo "Benutzerdefinierte Eingaben werden in diesem Menü nicht unterstützt (${SELECT_WITH_HISTORY_RESULT:-})." >&2
+                save_history "PLUGIN_FAILURE_ACTION" "INDEX:1"
+                continue
+            fi
+            break
+        done
 
         case "$choice" in
             2)
@@ -931,9 +1174,10 @@ main() {
         fi
     fi
 
-    VERSION=$(read_with_history "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?" "LATEST" "VERSION")
     MEMORY=$(read_with_history "Wieviel RAM (z. B. 6G, 8G)?" "6G" "MEMORY")
     TYPE=$(read_with_history "Welcher Server-Typ (PAPER, SPIGOT, VANILLA, ... )?" "PAPER" "TYPE")
+
+    select_version_for_type "$TYPE" "VERSION" "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?"
 
     PAPER_CHANNEL_DEFAULT="default"
     if [[ "${TYPE^^}" == "PAPER" ]]; then
