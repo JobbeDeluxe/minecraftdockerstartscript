@@ -385,6 +385,16 @@ select_version_for_type() {
             return
         fi
 
+        if [[ -z "${chosen:-}" ]]; then
+            echo "Keine Version angegeben. Bitte erneut wählen." >&2
+            continue
+        fi
+
+        if [[ "${chosen^^}" == "${type^^}" ]]; then
+            echo "Die Eingabe entspricht dem Server-Typ '${type}'. Bitte geben Sie eine gültige Versionsnummer an." >&2
+            continue
+        fi
+
         local valid=0
         for v in "${all_versions[@]}"; do
             if [[ "$v" == "$chosen" ]]; then
@@ -443,6 +453,33 @@ select_server_type() {
     TYPE="$chosen"
 }
 
+prompt_host_port() {
+    local history_key="HOST_PORT"
+    local default_port="25565"
+    local last_value
+    while true; do
+        last_value=$(load_history "$history_key" || true)
+        if [[ -z "${last_value:-}" ]]; then
+            last_value="$default_port"
+        fi
+
+        printf "Welcher Host-Port soll für den Minecraft-Server verwendet werden? (Standard: %s): " "$last_value" >&2
+        local input=""
+        read -r input || input=""
+        if [[ -z "${input:-}" ]]; then
+            input="$last_value"
+        fi
+
+        if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= 65535 )); then
+            HOST_PORT="$input"
+            save_history "$history_key" "$HOST_PORT"
+            break
+        fi
+
+        echo "Ungültige Portnummer '${input}'. Bitte eine Zahl zwischen 1 und 65535 angeben." >&2
+    done
+}
+
 # === Pfad abfragen (vor Log-Init) ===
 echo "=== Minecraft Server Management Script ===" >&2
 DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecraft_server" "DATA_DIR")
@@ -455,6 +492,7 @@ PLUGIN_DIR="${DATA_DIR}/plugins"
 PLUGIN_CONFIG="${DATA_DIR}/plugins.txt"
 DOCKER_IMAGE="itzg/minecraft-server"
 LOG_FILE="${DATA_DIR}/update_log.txt"
+HOST_PORT="25565"
 
 mkdir -p "$DATA_DIR"
 
@@ -1189,7 +1227,7 @@ update_docker() {
     log "Starte neuen Docker-Container..."
     local docker_args=(
         -d
-        -p 25565:25565
+        -p "${HOST_PORT}:25565"
         -p 19132:19132/udp
         -p 24454:24454/udp   # Simple Voice Chat UDP-Port
         -v "${DATA_DIR}:/data"
@@ -1271,6 +1309,8 @@ main() {
     select_server_type
 
     select_version_for_type "$TYPE" "VERSION" "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?"
+
+    prompt_host_port
 
     PAPER_CHANNEL_DEFAULT="default"
     if [[ "${TYPE^^}" == "PAPER" ]]; then
