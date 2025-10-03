@@ -351,6 +351,37 @@ select_version_for_type() {
     done
 }
 
+select_server_type() {
+    local prompt="Welcher Server-Typ (PAPER, SPIGOT, VANILLA, ... )?"
+    local history_key="TYPE"
+    local -a options=(
+        "PAPER"
+        "FOLIA"
+        "PURPUR"
+        "SPIGOT"
+        "VANILLA"
+        "FABRIC"
+        "FORGE"
+        "QUILT"
+        "BUNGEECORD"
+        "VELOCITY"
+    )
+
+    if ! select_with_history "$prompt" "$history_key" "${options[@]}" >/dev/null; then
+        echo "Server-Typ konnte nicht ausgewählt werden." >&2
+        exit 1
+    fi
+
+    local chosen="$SELECT_WITH_HISTORY_RESULT"
+    if [[ -z "${chosen:-}" ]]; then
+        chosen="PAPER"
+    fi
+
+    chosen="${chosen^^}"
+    save_history "$history_key" "$chosen"
+    TYPE="$chosen"
+}
+
 # === Pfad abfragen (vor Log-Init) ===
 echo "=== Minecraft Server Management Script ===" >&2
 DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecraft_server" "DATA_DIR")
@@ -1175,7 +1206,7 @@ main() {
     fi
 
     MEMORY=$(read_with_history "Wieviel RAM (z. B. 6G, 8G)?" "6G" "MEMORY")
-    TYPE=$(read_with_history "Welcher Server-Typ (PAPER, SPIGOT, VANILLA, ... )?" "PAPER" "TYPE")
+    select_server_type
 
     select_version_for_type "$TYPE" "VERSION" "Welche Minecraft-Version (z. B. LATEST, 1.21.1)?"
 
