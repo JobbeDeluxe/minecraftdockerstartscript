@@ -267,7 +267,7 @@ map_type_to_version_endpoint() {
         PAPER|FOLIA)
             local slug
             slug="$(echo "$type_upper" | tr '[:upper:]' '[:lower:]')"
-            printf '%s\n' "papermc:https://api.papermc.io/v2/projects/${slug}"
+            printf '%s\n' "papermc_fill:https://fill.papermc.io/v3/projects/${slug}"
             return 0
             ;;
         PURPUR)
@@ -297,6 +297,7 @@ fetch_versions_for_type() {
 
     local jq_filter
     case "$provider" in
+        papermc_fill) jq_filter='.versions | to_entries[] | .value[]?' ;;
         papermc) jq_filter='.versions[]?' ;;
         purpur)  jq_filter='.versions[]?' ;;
         *)       return 1 ;;
@@ -316,13 +317,21 @@ get_paper_version_channel_summary() {
     fi
 
     local url resp
-    url="https://api.papermc.io/v2/projects/paper/versions/${version}/builds"
+    if [[ "$version" == 26.* ]]; then
+        url="https://fill.papermc.io/v3/projects/paper/versions/${version}/builds"
+    else
+        url="https://api.papermc.io/v2/projects/paper/versions/${version}/builds"
+    fi
     if ! resp=$(curl -sfL "$url" 2>/dev/null); then
         return 1
     fi
 
     local summary
-    summary=$(echo "$resp" | jq -r '.builds[]?.channel' 2>/dev/null | awk 'NF' | sort -u | paste -sd ', ' -)
+    if [[ "$version" == 26.* ]]; then
+        summary=$(echo "$resp" | jq -r '.[].channel' 2>/dev/null | awk 'NF' | sort -u | paste -sd ', ' -)
+    else
+        summary=$(echo "$resp" | jq -r '.builds[]?.channel' 2>/dev/null | awk 'NF' | sort -u | paste -sd ', ' -)
+    fi
     if [[ -z "${summary:-}" ]]; then
         return 1
     fi
@@ -628,25 +637,27 @@ prompt_additional_ports() {
     done
 }
 
-# === Pfad abfragen (vor Log-Init) ===
-echo "=== Minecraft Server Management Script ===" >&2
-DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecraft_server" "DATA_DIR")
+init_environment() {
+    # === Pfad abfragen (vor Log-Init) ===
+    echo "=== Minecraft Server Management Script ===" >&2
+    DATA_DIR=$(read_with_history "Pfad zum Minecraft-Datenverzeichnis" "/opt/minecraft_server" "DATA_DIR")
 
-# === Initialisierung nach DATA_DIR ===
-SERVER_NAME="mc"
-SERVER_NAME=$(read_with_history "Docker Container-Name" "$SERVER_NAME" "SERVER_NAME")
-BACKUP_DIR="${DATA_DIR}/backups"
-PLUGIN_DIR="${DATA_DIR}/plugins"
-PLUGIN_CONFIG="${DATA_DIR}/plugins.txt"
-DOCKER_IMAGE="itzg/minecraft-server"
-LOG_FILE="${DATA_DIR}/update_log.txt"
-HOST_PORT="25565"
-EXTRA_PORT_MAPPINGS=()
-VERSION=""
-VERSION_CHANNEL_HINT=""
-VERSION_SELECTION_SOURCE="manual"
+    # === Initialisierung nach DATA_DIR ===
+    SERVER_NAME="mc"
+    SERVER_NAME=$(read_with_history "Docker Container-Name" "$SERVER_NAME" "SERVER_NAME")
+    BACKUP_DIR="${DATA_DIR}/backups"
+    PLUGIN_DIR="${DATA_DIR}/plugins"
+    PLUGIN_CONFIG="${DATA_DIR}/plugins.txt"
+    DOCKER_IMAGE="itzg/minecraft-server"
+    LOG_FILE="${DATA_DIR}/update_log.txt"
+    HOST_PORT="25565"
+    EXTRA_PORT_MAPPINGS=()
+    VERSION=""
+    VERSION_CHANNEL_HINT=""
+    VERSION_SELECTION_SOURCE="manual"
 
-mkdir -p "$DATA_DIR"
+    mkdir -p "$DATA_DIR"
+}
 
 # ------------------------ Logging & Traps ------------------------
 
@@ -736,6 +747,235 @@ delete_and_backup_plugins() {
 
 # ------------------------ Download Helpers ------------------------
 
+# ------------------------ Plugin-Konfiguration ------------------------
+
+create_plugin_config_template() {
+    cat <<'EOL' > "$PLUGIN_CONFIG"
+# Format: <Plugin-Name> <Quelle>
+# Quellen-Typen:
+#   - GitHub-Repo:          https://github.com/<owner>/<repo>
+#   - Spigot-Seite:         https://www.spigotmc.org/resources/<slug>.<ID>/
+#   - Modrinth:             modrinth:<slug>   ODER   https://modrinth.com/plugin/<slug>
+#     (optional: Kanal festlegen: modrinth:<slug>@beta  bzw. @alpha)
+#   - Direkter Link (.jar): https://...
+#   - Source-Build:         build[:branch] ODER build:<owner>/<repo>[:branch]
+
+# Beispiele:
+# CoreProtect build:PlayPro/CoreProtect:master
+# SimpleVoiceChat https://modrinth.com/plugin/simple-voice-chat
+# VoiceChatDiscordBridge modrinth:simple-voice-chat-discord-bridge
+# DiscordSRV https://www.spigotmc.org/resources/discordsrv.18494/
+# GriefPrevention modrinth:griefprevention
+# ViaVersion https://github.com/ViaVersion/ViaVersion
+# ViaBackwards https://github.com/ViaVersion/ViaBackwards
+# Geyser-Spigot https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
+# floodgate-spigot https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
+EOL
+}
+
+ensure_plugin_config() {
+    if [[ ! -f "$PLUGIN_CONFIG" ]]; then
+        log "plugins.txt nicht gefunden – erstelle Vorlage (alles kommentiert)."
+        create_plugin_config_template
+        log "Vorlage erstellt: $PLUGIN_CONFIG"
+    fi
+}
+
+parse_plugin_config_entry() {
+    local line="$1"
+    local active="ja"
+    local cleaned="$line"
+
+    if [[ "$cleaned" =~ ^[[:space:]]*# ]]; then
+        active="nein"
+        cleaned="${cleaned#\#}"
+        cleaned="${cleaned#"${cleaned%%[![:space:]]*}"}"
+    fi
+
+    cleaned="${cleaned%%#*}"
+    cleaned="${cleaned#"${cleaned%%[![:space:]]*}"}"
+    cleaned="${cleaned%"${cleaned##*[![:space:]]}"}"
+    [[ -z "$cleaned" ]] && return 1
+
+    local source="${cleaned##*[[:space:]]}"
+    case "$source" in
+        http://*|https://*|modrinth:*|build|build:*) ;;
+        *) return 1 ;;
+    esac
+
+    local name="${cleaned%[[:space:]]$source}"
+    name="${name%"${name##*[![:space:]]}"}"
+    [[ -z "$name" ]] && return 1
+
+    printf '%s\t%s\t%s\n' "$active" "$name" "$source"
+}
+
+is_valid_plugin_source() {
+    local source="$1"
+    case "$source" in
+        http://*|https://*|modrinth:*|build|build:*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+ensure_file_ends_with_newline() {
+    local file="$1"
+    [[ -s "$file" ]] || return 0
+
+    local last_byte
+    last_byte=$(tail -c 1 "$file" 2>/dev/null || true)
+    if [[ "$last_byte" != $'\n' ]]; then
+        printf '\n' >> "$file"
+    fi
+}
+
+append_plugin_config_entry() {
+    local plugin_name="$1"
+    local plugin_source="$2"
+
+    ensure_file_ends_with_newline "$PLUGIN_CONFIG"
+    printf '%s %s\n' "$plugin_name" "$plugin_source" >> "$PLUGIN_CONFIG"
+}
+
+load_plugin_config_entries() {
+    PLUGIN_ENTRY_LINES=()
+    PLUGIN_ENTRY_ACTIVE=()
+    PLUGIN_ENTRY_NAMES=()
+    PLUGIN_ENTRY_SOURCES=()
+
+    local line parsed active name source line_no=0
+    while IFS= read -r line || [[ -n "${line:-}" ]]; do
+        ((++line_no))
+        if parsed="$(parse_plugin_config_entry "$line")"; then
+            IFS=$'\t' read -r active name source <<<"$parsed"
+            PLUGIN_ENTRY_LINES+=("$line_no")
+            PLUGIN_ENTRY_ACTIVE+=("$active")
+            PLUGIN_ENTRY_NAMES+=("$name")
+            PLUGIN_ENTRY_SOURCES+=("$source")
+        fi
+    done < "$PLUGIN_CONFIG"
+}
+
+rewrite_plugin_config_line() {
+    local target_line="$1"
+    local mode="$2"
+    local tmp_file
+    tmp_file="$(mktemp)"
+
+    local line line_no=0
+    while IFS= read -r line || [[ -n "${line:-}" ]]; do
+        ((++line_no))
+        if (( line_no == target_line )); then
+            case "$mode" in
+                enable)
+                    line="${line#"${line%%[![:space:]]*}"}"
+                    line="${line#\#}"
+                    line="${line#"${line%%[![:space:]]*}"}"
+                    ;;
+                disable)
+                    if [[ ! "$line" =~ ^[[:space:]]*# ]]; then
+                        line="# $line"
+                    fi
+                    ;;
+                delete)
+                    continue
+                    ;;
+            esac
+        fi
+        printf '%s\n' "$line" >> "$tmp_file"
+    done < "$PLUGIN_CONFIG"
+
+    mv "$tmp_file" "$PLUGIN_CONFIG"
+}
+
+manage_plugin_config() {
+    ensure_plugin_config
+
+    while true; do
+        load_plugin_config_entries
+        echo "=== Pluginliste verwalten ==="
+        if (( ${#PLUGIN_ENTRY_LINES[@]} == 0 )); then
+            echo "Keine Plugin-Einträge vorhanden."
+        else
+            local i status
+            for i in "${!PLUGIN_ENTRY_LINES[@]}"; do
+                status="aktiv"
+                [[ "${PLUGIN_ENTRY_ACTIVE[$i]}" == "nein" ]] && status="deaktiviert"
+                printf "  %d) [%s] %s -> %s\n" "$((i + 1))" "$status" "${PLUGIN_ENTRY_NAMES[$i]}" "${PLUGIN_ENTRY_SOURCES[$i]}"
+            done
+        fi
+
+        echo ""
+        echo "1. Plugin aktivieren/deaktivieren"
+        echo "2. Plugin hinzufügen"
+        echo "3. Plugin löschen"
+        echo "4. Fertig"
+        read -r -p "Auswahl: " choice
+
+        case "$choice" in
+            1)
+                if (( ${#PLUGIN_ENTRY_LINES[@]} == 0 )); then
+                    echo "Keine Plugin-Einträge zum Umschalten vorhanden."
+                    continue
+                fi
+                local idx arr_idx
+                read -r -p "Nummer des Plugins: " idx
+                if [[ ! "$idx" =~ ^[0-9]+$ ]] || (( idx < 1 || idx > ${#PLUGIN_ENTRY_LINES[@]} )); then
+                    echo "Ungültige Auswahl."
+                    continue
+                fi
+                arr_idx=$((idx - 1))
+                if [[ "${PLUGIN_ENTRY_ACTIVE[$arr_idx]}" == "ja" ]]; then
+                    rewrite_plugin_config_line "${PLUGIN_ENTRY_LINES[$arr_idx]}" disable
+                    echo "${PLUGIN_ENTRY_NAMES[$arr_idx]} deaktiviert."
+                else
+                    rewrite_plugin_config_line "${PLUGIN_ENTRY_LINES[$arr_idx]}" enable
+                    echo "${PLUGIN_ENTRY_NAMES[$arr_idx]} aktiviert."
+                fi
+                ;;
+            2)
+                local plugin_name plugin_source
+                read -r -p "Plugin-Name: " plugin_name
+                read -r -p "Quelle (URL, modrinth:<slug>, build[:branch] oder build:<owner>/<repo>[:branch]): " plugin_source
+                if [[ -z "${plugin_name// }" || -z "${plugin_source// }" ]]; then
+                    echo "Name und Quelle dürfen nicht leer sein."
+                    continue
+                fi
+                if ! is_valid_plugin_source "$plugin_source"; then
+                    echo "Ungültige Quelle. Erlaubt sind http(s)-URLs, modrinth:<slug>, build[:branch] oder build:<owner>/<repo>[:branch]."
+                    continue
+                fi
+                append_plugin_config_entry "$plugin_name" "$plugin_source"
+                echo "$plugin_name hinzugefügt und aktiviert."
+                ;;
+            3)
+                if (( ${#PLUGIN_ENTRY_LINES[@]} == 0 )); then
+                    echo "Keine Plugin-Einträge zum Löschen vorhanden."
+                    continue
+                fi
+                local idx arr_idx confirm
+                read -r -p "Nummer des Plugins: " idx
+                if [[ ! "$idx" =~ ^[0-9]+$ ]] || (( idx < 1 || idx > ${#PLUGIN_ENTRY_LINES[@]} )); then
+                    echo "Ungültige Auswahl."
+                    continue
+                fi
+                arr_idx=$((idx - 1))
+                read -r -p "${PLUGIN_ENTRY_NAMES[$arr_idx]} wirklich löschen? (ja/nein): " confirm
+                if [[ "${confirm,,}" =~ ^(ja|j|yes|y)$ ]]; then
+                    rewrite_plugin_config_line "${PLUGIN_ENTRY_LINES[$arr_idx]}" delete
+                    echo "${PLUGIN_ENTRY_NAMES[$arr_idx]} gelöscht."
+                fi
+                ;;
+            4|"")
+                return 0
+                ;;
+            *)
+                echo "Ungültige Auswahl."
+                ;;
+        esac
+    done
+}
+
 # Robuste Erkennung von owner/repo aus GitHub-URL (ohne Regex-Fallen)
 normalize_github_owner_repo() {
     local url="$1"
@@ -764,7 +1004,6 @@ normalize_github_owner_repo() {
 # Ermittelt die neueste Release-JAR aus GitHub
 github_latest_jar_url() {
     local owner_repo="$1"
-    local api_url="https://api.github.com/repos/${owner_repo}/releases/latest"
 
     local auth_args=()
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
@@ -772,7 +1011,8 @@ github_latest_jar_url() {
     fi
 
     local resp
-    if ! resp=$(curl -sfL -H "Accept: application/vnd.github+json" "${auth_args[@]}" "$api_url"); then
+    if ! resp=$(curl -sfL -H "Accept: application/vnd.github+json" "${auth_args[@]}" \
+        "https://api.github.com/repos/${owner_repo}/releases/latest"); then
         return 1
     fi
 
@@ -782,6 +1022,23 @@ github_latest_jar_url() {
         url=$(echo "$resp" | jq -r '.assets[]? | select(.name|test("\\.jar$")) | .browser_download_url' | head -1)
     fi
 
+    if [[ -n "${url:-}" && "$url" != "null" ]]; then
+        echo "$url"
+        return 0
+    fi
+
+    # Einige Projekte markieren das neueste Release ohne Assets. Dann suchen wir
+    # die jüngsten Releases nach der ersten passenden JAR ab.
+    if ! resp=$(curl -sfL -H "Accept: application/vnd.github+json" "${auth_args[@]}" \
+        "https://api.github.com/repos/${owner_repo}/releases?per_page=20"); then
+        return 1
+    fi
+
+    url=$(echo "$resp" | jq -r '.[] | .assets[]? | select(.name|test("(?i)(spigot|paper).+\\.jar$")) | .browser_download_url' | head -1)
+    if [[ -z "${url:-}" || "$url" == "null" ]]; then
+        url=$(echo "$resp" | jq -r '.[] | .assets[]? | select(.name|test("\\.jar$")) | .browser_download_url' | head -1)
+    fi
+
     [[ -n "${url:-}" && "$url" != "null" ]] && echo "$url"
 }
 
@@ -789,7 +1046,10 @@ github_latest_jar_url() {
 download_file() {
     local url="$1"
     local out="$2"
-    curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 -A "Mozilla/5.0" -o "$out" "$url"
+    curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 \
+        -H "Accept: application/octet-stream,*/*;q=0.8" \
+        -A "minecraftdockerstartscript/1.0 (+https://github.com/JobbeDeluxe/minecraftdockerstartscript)" \
+        -o "$out" "$url"
 }
 
 # ------------------------ Spigot → Spiget (LATEST Download) ------------------------
@@ -817,7 +1077,7 @@ spiget_latest_download_url() {
 extract_modrinth_slug() {
   local url="$1"
   url="${url#http://}"; url="${url#https://}"; url="${url#www.}"
-  if [[ "$url" =~ ^modrinth\.com/(plugin|project)/([A-Za-z0-9._-]+) ]]; then
+  if [[ "$url" =~ ^modrinth\.com/(plugin|project|mod)/([A-Za-z0-9._-]+) ]]; then
     echo "${BASH_REMATCH[2]}"
     return 0
   fi
@@ -830,7 +1090,10 @@ modrinth_latest_jar_url() {
     local slug="$1"
     local channels_csv="${2:-${MODRINTH_CHANNELS:-release,beta,alpha}}"
     local resp
-    resp="$(curl -sfL "https://api.modrinth.com/v2/project/${slug}/version")" || return 1
+    resp="$(curl -sfL \
+        -H "Accept: application/json" \
+        -A "minecraftdockerstartscript/1.0 (+https://github.com/JobbeDeluxe/minecraftdockerstartscript)" \
+        "https://api.modrinth.com/v2/project/${slug}/version")" || return 1
 
     local IFS=','; read -ra chans <<< "$channels_csv"
     for chan in "${chans[@]}"; do
@@ -853,6 +1116,19 @@ modrinth_latest_jar_url() {
           return 0
         fi
     done
+    return 1
+}
+
+bukkit_modrinth_slug_fallback() {
+    local plugin_name="$1"
+
+    case "${plugin_name,,}" in
+        worldedit|world-edit)
+            echo "worldedit"
+            return 0
+            ;;
+    esac
+
     return 1
 }
 
@@ -919,34 +1195,91 @@ download_griefprevention_latest() {
     return 1
 }
 
-# ------------------------ CoreProtect Build (master + plugin.yml Patch) ------------------------
+# Kopiert JARs aus dem temporären Download-Verzeichnis und kann Plugins auslassen,
+# deren alte Version bewusst behalten werden soll.
+copy_plugin_jars() {
+    local src_dir="$1"
+    local dst_dir="$2"
+    shift 2
 
-# build_coreprotect_from_source <branch> <out_jar_path>
-build_coreprotect_from_source() {
-    local branch="${1:-master}"
-    local out_path="$2"
+    local -a skip_names=("$@")
+    local jar base plugin skip_name skip
+    shopt -s nullglob
+    for jar in "$src_dir"/*.jar; do
+        base="$(basename "$jar")"
+        plugin="${base%.jar}"
+        skip=0
+        for skip_name in "${skip_names[@]}"; do
+            if [[ "${plugin,,}" == "${skip_name,,}" ]]; then
+                skip=1
+                break
+            fi
+        done
+        if (( skip )); then
+            log "Behalte alte Version von ${plugin}; neue/fallback JAR wird nicht übernommen."
+            continue
+        fi
+        cp -v "$jar" "$dst_dir/" | tee -a "$LOG_FILE"
+    done
+    shopt -u nullglob
+}
 
-    local workdir zip srcdir plugin_yml built
-    workdir="$(mktemp -d)"
-    zip="${workdir}/src.zip"
+parse_build_directive() {
+    local plugin_name="$1"
+    local directive="$2"
+    local default_repo=""
+    local spec repo branch="master"
 
-    log "CoreProtect: Lade Source (Branch: ${branch})..."
-    if ! curl -fL -A "Mozilla/5.0" -o "$zip" "https://github.com/PlayPro/CoreProtect/archive/refs/heads/${branch}.zip"; then
-        log "FEHLER: Konnte Source-Archiv für Branch '${branch}' nicht laden."
-        rm -rf "$workdir"
+    if [[ "${plugin_name,,}" == "coreprotect" ]]; then
+        default_repo="PlayPro/CoreProtect"
+    fi
+
+    if [[ "$directive" == "build" ]]; then
+        [[ -n "$default_repo" ]] || return 1
+        BUILD_REPO="$default_repo"
+        BUILD_BRANCH="$branch"
+        return 0
+    fi
+
+    [[ "$directive" == build:* ]] || return 1
+    spec="${directive#build:}"
+
+    if [[ "$spec" == http://* || "$spec" == https://* ]]; then
+        if repo="$(normalize_github_owner_repo "$spec")"; then
+            branch="${spec##*:}"
+            if [[ "$branch" == "$spec" || "$branch" == http* || "$branch" == */* ]]; then
+                branch="master"
+            fi
+            BUILD_REPO="$repo"
+            BUILD_BRANCH="$branch"
+            return 0
+        fi
         return 1
     fi
 
-    unzip -q "$zip" -d "$workdir" || { log "FEHLER: Entpacken fehlgeschlagen."; rm -rf "$workdir"; return 1; }
-
-    plugin_yml="$(find "$workdir" -type f -path "*/src/main/resources/plugin.yml" | head -1)"
-    if [[ -z "${plugin_yml:-}" ]]; then
-        log "FEHLER: plugin.yml nicht gefunden."
-        rm -rf "$workdir"
-        return 1
+    if [[ "$spec" == */* ]]; then
+        repo="$spec"
+        if [[ "$repo" == *:* ]]; then
+            branch="${repo##*:}"
+            repo="${repo%:*}"
+        fi
+        BUILD_REPO="$repo"
+        BUILD_BRANCH="${branch:-master}"
+        return 0
     fi
 
-    # Patch: ${project.branch} -> developement
+    [[ -n "$default_repo" ]] || return 1
+    BUILD_REPO="$default_repo"
+    BUILD_BRANCH="$spec"
+    return 0
+}
+
+# ------------------------ Source Build (Maven) ------------------------
+
+patch_coreprotect_source() {
+    local plugin_yml="$1"
+    local srcdir="$2"
+
     if grep -q 'branch:[[:space:]]*\${project\.branch}' "$plugin_yml"; then
         sed -i 's/branch:[[:space:]]*\${project\.branch}/branch: developement/' "$plugin_yml"
         log "CoreProtect: plugin.yml angepasst (branch -> developement)."
@@ -959,36 +1292,102 @@ build_coreprotect_from_source() {
         log "CoreProtect: plugin.yml (Fallback) – branch: developement gesetzt."
     fi
 
-    # Projektwurzel bestimmen
-    srcdir="$(dirname "$(dirname "$plugin_yml")")"  # .../src/main
-    srcdir="$(dirname "$srcdir")"                  # .../src
-    srcdir="$(dirname "$srcdir")"                  # Projektwurzel
+    local pom_file="$srcdir/pom.xml"
+    if [[ -f "$pom_file" ]]; then
+        sed -i -E \
+            -e 's#<maven\.compiler\.source>[^<]+</maven\.compiler\.source>#<maven.compiler.source>25</maven.compiler.source>#' \
+            -e 's#<maven\.compiler\.target>[^<]+</maven\.compiler\.target>#<maven.compiler.target>25</maven.compiler.target>#' \
+            -e 's#<source>[0-9]+</source>#<source>25</source>#' \
+            -e 's#<target>[0-9]+</target>#<target>25</target>#' \
+            "$pom_file"
+        log "CoreProtect: Maven Compiler-Level auf Java 25 gesetzt."
+    fi
+}
 
-    log "CoreProtect: Baue Plugin (Maven, Tests übersprungen)..."
+find_built_jar() {
+    local srcdir="$1"
+    local plugin_name="$2"
+    local jar
+
+    jar="$(find "$srcdir/target" -maxdepth 1 -type f -name "${plugin_name}-*.jar" ! -name '*sources.jar' ! -name '*javadoc.jar' | head -1)"
+    if [[ -z "${jar:-}" ]]; then
+        jar="$(find "$srcdir/target" -maxdepth 1 -type f -name '*.jar' ! -name '*sources.jar' ! -name '*javadoc.jar' | head -1)"
+    fi
+    [[ -n "${jar:-}" ]] && printf '%s\n' "$jar"
+}
+
+# build_plugin_from_source <plugin_name> <owner/repo> <branch> <out_jar_path>
+build_plugin_from_source() {
+    local plugin_name="$1"
+    local owner_repo="$2"
+    local branch="${3:-master}"
+    local out_path="$4"
+    COREPROTECT_USED_RELEASE_FALLBACK=0
+
+    local workdir zip srcdir plugin_yml built
+    workdir="$(mktemp -d)"
+    zip="${workdir}/src.zip"
+
+    log "${plugin_name}: Lade Source (${owner_repo}, Branch: ${branch})..."
+    if ! curl -fL -A "Mozilla/5.0" -o "$zip" "https://github.com/${owner_repo}/archive/refs/heads/${branch}.zip"; then
+        log "FEHLER: Konnte Source-Archiv für ${owner_repo}:${branch} nicht laden."
+        rm -rf "$workdir"
+        return 1
+    fi
+
+    unzip -q "$zip" -d "$workdir" || { log "FEHLER: Entpacken fehlgeschlagen."; rm -rf "$workdir"; return 1; }
+
+    plugin_yml="$(find "$workdir" -type f -path "*/src/main/resources/plugin.yml" | head -1)"
+    if [[ -n "${plugin_yml:-}" ]]; then
+        srcdir="$(dirname "$(dirname "$plugin_yml")")"  # .../src/main
+        srcdir="$(dirname "$srcdir")"                  # .../src
+        srcdir="$(dirname "$srcdir")"                  # Projektwurzel
+    else
+        srcdir="$(find "$workdir" -type f -name pom.xml -exec dirname {} \; | head -1)"
+    fi
+
+    if [[ -z "${srcdir:-}" || ! -f "$srcdir/pom.xml" ]]; then
+        log "FEHLER: Maven-Projektwurzel nicht gefunden."
+        rm -rf "$workdir"
+        return 1
+    fi
+
+    if [[ "${plugin_name,,}" == "coreprotect" ]]; then
+        if [[ -z "${plugin_yml:-}" ]]; then
+            log "FEHLER: CoreProtect plugin.yml nicht gefunden."
+            rm -rf "$workdir"
+            return 1
+        fi
+        patch_coreprotect_source "$plugin_yml" "$srcdir"
+    fi
+
+    log "${plugin_name}: Baue Plugin (Maven, Tests übersprungen)..."
     local build_log="$workdir/coreprotect_maven.log"
     local build_ok=0
     local maven_opts_append="-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true"
+    local -a coreprotect_maven_args=(-B -q -DskipTests -Dmaven.compiler.source=25 -Dmaven.compiler.target=25 package)
+    local coreprotect_maven_image="${COREPROTECT_MAVEN_IMAGE:-maven:3.9-eclipse-temurin-25}"
 
     if command -v mvn >/dev/null 2>&1; then
-        if ( cd "$srcdir" && MAVEN_OPTS="${MAVEN_OPTS:-} ${maven_opts_append}" mvn -B -q -DskipTests package ) &>"$build_log"; then
+        if ( cd "$srcdir" && MAVEN_OPTS="${MAVEN_OPTS:-} ${maven_opts_append}" mvn "${coreprotect_maven_args[@]}" ) &>"$build_log"; then
             build_ok=1
         else
-            log "CoreProtect: Lokaler Maven-Build fehlgeschlagen."
+            log "${plugin_name}: Lokaler Maven-Build fehlgeschlagen."
         fi
     fi
 
     if (( build_ok == 0 )); then
         if command -v docker >/dev/null 2>&1; then
-            log "CoreProtect: Versuche Maven-Build per Docker-Fallback..."
+            log "${plugin_name}: Versuche Maven-Build per Docker-Fallback..."
             if docker run --rm -v "$srcdir":/src -w /src \
                 -e MAVEN_OPTS="${MAVEN_OPTS:-} ${maven_opts_append}" \
-                maven:3.9-eclipse-temurin-21 mvn -B -q -DskipTests package &>"$build_log"; then
+                "$coreprotect_maven_image" mvn "${coreprotect_maven_args[@]}" &>"$build_log"; then
                 build_ok=1
             else
-                log "CoreProtect: Docker-Maven-Build fehlgeschlagen."
+                log "${plugin_name}: Docker-Maven-Build fehlgeschlagen."
             fi
         else
-            log "CoreProtect: Docker nicht verfügbar, kann Maven-Fallback nicht nutzen."
+            log "${plugin_name}: Docker nicht verfügbar, kann Maven-Fallback nicht nutzen."
         fi
     fi
 
@@ -998,8 +1397,13 @@ build_coreprotect_from_source() {
             tail -n 20 "$build_log" | while IFS= read -r line; do log "$line"; done
             log "--- Ende Maven-Fehlerausgabe ---"
         fi
-        log "CoreProtect: Build fehlgeschlagen – versuche Fallback auf offizielle Releases."
-        if download_coreprotect_release_fallback "$out_path"; then
+        if [[ "${plugin_name,,}" == "coreprotect" ]]; then
+            log "CoreProtect: Build fehlgeschlagen – versuche Fallback auf offizielle Releases."
+        elif [[ "${owner_repo,,}" == *"coreprotect" ]]; then
+            log "${plugin_name}: Build fehlgeschlagen – versuche GitHub-Release-Fallback."
+        fi
+        if [[ "${plugin_name,,}" == "coreprotect" || "${owner_repo,,}" == *"coreprotect" ]] && download_coreprotect_release_fallback "$out_path"; then
+            COREPROTECT_USED_RELEASE_FALLBACK=1
             rm -rf "$workdir"
             return 0
         fi
@@ -1009,30 +1413,17 @@ build_coreprotect_from_source() {
 
     rm -f "$build_log"
 
-    built="$(find "$srcdir/target" -maxdepth 1 -type f -name 'CoreProtect-*.jar' | head -1)"
+    built="$(find_built_jar "$srcdir" "$plugin_name")"
     if [[ -z "${built:-}" ]]; then
-        log "FEHLER: CoreProtect-JAR nicht gefunden."
+        log "FEHLER: ${plugin_name}-JAR nicht gefunden."
         rm -rf "$workdir"
         return 1
     fi
 
     cp -f "$built" "$out_path"
-    log "ERFOLG: CoreProtect gebaut -> $(basename "$out_path")"
+    log "ERFOLG: ${plugin_name} gebaut -> $(basename "$out_path")"
     rm -rf "$workdir"
     return 0
-}
-
-# parse_build_directive "build" / "build:master" / "build:<branch>"
-parse_build_directive() {
-    local url="$1"
-    local branch="master"
-    if [[ "$url" == build ]]; then
-        echo "$branch"; return 0
-    fi
-    if [[ "$url" == build:* ]]; then
-        echo "${url#build:}"; return 0
-    fi
-    return 1
 }
 
 # ------------------------ Plugin-Update (mit Fehler-Menü) ------------------------
@@ -1041,42 +1432,19 @@ update_plugins() {
     log "Aktualisiere Plugins..."
     mkdir -p "$PLUGIN_DIR"
 
-    if [[ ! -f "$PLUGIN_CONFIG" ]]; then
-        log "plugins.txt nicht gefunden – erstelle Vorlage (alles kommentiert)."
-        cat <<'EOL' > "$PLUGIN_CONFIG"
-# Format: <Plugin-Name> <Quelle>
-# Quellen-Typen:
-#   - GitHub-Repo:          https://github.com/<owner>/<repo>
-#   - Spigot-Seite:         https://www.spigotmc.org/resources/<slug>.<ID>/
-#   - Modrinth:             modrinth:<slug>   ODER   https://modrinth.com/plugin/<slug>
-#     (optional: Kanal festlegen: modrinth:<slug>@beta  bzw. @alpha)
-#   - Direkter Link (.jar): https://...
-#   - CoreProtect Build:    build[:branch]  (z.B. build:master)
-
-# Beispiele:
-# CoreProtect build:master
-# SimpleVoiceChat https://modrinth.com/plugin/simple-voice-chat
-# VoiceChatDiscordBridge modrinth:simple-voice-chat-discord-bridge
-# DiscordSRV https://www.spigotmc.org/resources/discordsrv.18494/
-# GriefPrevention modrinth:griefprevention
-# ViaVersion https://github.com/ViaVersion/ViaVersion
-# ViaBackwards https://github.com/ViaVersion/ViaBackwards
-# Geyser-Spigot https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
-# floodgate-spigot https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
-EOL
-        log "Vorlage erstellt: $PLUGIN_CONFIG"
-    fi
+    ensure_plugin_config
 
     local temp_dir="${PLUGIN_DIR}_temp"
     rm -rf "$temp_dir" && mkdir -p "$temp_dir"
 
     local -a ok_list=()
     local -a fail_list=()
+    local -a fallback_list=()
 
     while IFS= read -r line || [[ -n "${line:-}" ]]; do
         [[ "$line" =~ ^#.*$ || -z "${line// }" ]] && continue
 
-        local plugin_name plugin_url target build_branch owner_repo asset_url
+        local plugin_name plugin_url target build_branch build_repo owner_repo asset_url
         plugin_name=$(echo "$line" | awk '{$NF=""; sub(/[ \t]+$/, ""); print}')
         plugin_url=$(echo "$line" | awk '{print $NF}')
         [[ -z "${plugin_name:-}" || -z "${plugin_url:-}" ]] && continue
@@ -1084,10 +1452,16 @@ EOL
         log "Verarbeite: $plugin_name (${plugin_url})"
         target="${temp_dir}/${plugin_name}.jar"
 
-        # CoreProtect: aus Source bauen
-        if [[ "${plugin_name,,}" == "coreprotect" ]] && build_branch="$(parse_build_directive "$plugin_url")"; then
-            if build_coreprotect_from_source "$build_branch" "$target"; then
+        # Source-Build per Maven
+        if parse_build_directive "$plugin_name" "$plugin_url"; then
+            build_repo="$BUILD_REPO"
+            build_branch="$BUILD_BRANCH"
+            COREPROTECT_USED_RELEASE_FALLBACK=0
+            if build_plugin_from_source "$plugin_name" "$build_repo" "$build_branch" "$target"; then
                 ok_list+=("$plugin_name")
+                if (( ${COREPROTECT_USED_RELEASE_FALLBACK:-0} )); then
+                    fallback_list+=("$plugin_name")
+                fi
             else
                 fail_list+=("$plugin_name")
             fi
@@ -1188,6 +1562,22 @@ EOL
             fi
 
         else
+            if [[ "$plugin_url" == *"dev.bukkit.org"* ]]; then
+                local fallback_slug fallback_url
+                if fallback_slug="$(bukkit_modrinth_slug_fallback "$plugin_name")"; then
+                    log "${plugin_name}: DevBukkit blockiert Direktdownloads häufig (403) – versuche Modrinth-Fallback (${fallback_slug})."
+                    fallback_url="$(modrinth_latest_jar_url "$fallback_slug")" || fallback_url=""
+                    if [[ -n "$fallback_url" ]] && download_file "$fallback_url" "$target"; then
+                        log "ERFOLG: $plugin_name (DevBukkit -> Modrinth-Fallback)"
+                        ok_list+=("$plugin_name")
+                    else
+                        log "FEHLER: Modrinth-Fallback fehlgeschlagen für $plugin_name (${fallback_slug})"
+                        fail_list+=("$plugin_name")
+                    fi
+                    continue
+                fi
+            fi
+
             if [[ "${plugin_name,,}" == "griefprevention" && "$plugin_url" == *"dev.bukkit.org"* ]]; then
                 if download_griefprevention_latest "$target"; then
                     log "GriefPrevention: Fallback-Download erfolgreich."
@@ -1216,11 +1606,17 @@ EOL
         find "${PLUGIN_DIR}/manuell" -maxdepth 1 -type f -name "*.jar" -exec cp -v -n {} "$temp_dir/" \; | tee -a "$LOG_FILE"
     fi
 
-    # Auswertung & Auswahl bei Fehlern
-    if (( ${#fail_list[@]} > 0 )); then
+    # Auswertung & Auswahl bei Fehlern oder Fallbacks
+    if (( ${#fail_list[@]} > 0 || ${#fallback_list[@]} > 0 )); then
         echo "---------------------------------------------"
-        echo "Folgende Plugins konnten NICHT geladen/gebaut werden:"
-        for p in "${fail_list[@]}"; do echo "  - $p"; done
+        if (( ${#fail_list[@]} > 0 )); then
+            echo "Folgende Plugins konnten NICHT geladen/gebaut werden:"
+            for p in "${fail_list[@]}"; do echo "  - $p"; done
+        fi
+        if (( ${#fallback_list[@]} > 0 )); then
+            echo "Folgende Plugins wurden nur per Fallback geladen:"
+            for p in "${fallback_list[@]}"; do echo "  - $p"; done
+        fi
         echo "---------------------------------------------"
         local choice temp_file
         while true; do
@@ -1229,8 +1625,8 @@ EOL
                 "Wählen Sie, wie fortgefahren werden soll (Enter übernimmt die zuletzt genutzte Option)." \
                 "PLUGIN_FAILURE_ACTION" \
                 "Abbrechen (keine Änderungen an Plugins)" \
-                "Weiter: Server OHNE die fehlgeschlagenen Plugins starten (alte Plugins werden ersetzt)" \
-                "Weiter: ALTE Plugins behalten und NUR neue erfolgreiche drüberkopieren" \
+                "Weiter: neue/fallback Plugins übernehmen; fehlgeschlagene weglassen" \
+                "Weiter: alte Versionen für fehlgeschlagene/Fallback-Plugins behalten; nur saubere Downloads übernehmen" \
                 >"$temp_file"; then
                 choice=1
             else
@@ -1248,15 +1644,15 @@ EOL
 
         case "$choice" in
             2)
-                log "Entferne alte Plugins und setze NUR erfolgreich geladene..."
+                log "Entferne alte Plugins und setze erfolgreich geladene inklusive Fallbacks..."
                 find "$PLUGIN_DIR" -maxdepth 1 -name "*.jar" -delete
-                find "$temp_dir" -maxdepth 1 -type f -name "*.jar" -exec cp -v {} "$PLUGIN_DIR/" \; | tee -a "$LOG_FILE"
-                log "Plugin-Update abgeschlossen (ohne fehlgeschlagene)."
+                copy_plugin_jars "$temp_dir" "$PLUGIN_DIR"
+                log "Plugin-Update abgeschlossen (fehlgeschlagene ausgelassen, Fallbacks übernommen)."
                 ;;
             3)
-                log "Behalte alte Plugins und kopiere NUR erfolgreich geladene drüber..."
-                find "$temp_dir" -maxdepth 1 -type f -name "*.jar" -exec cp -v {} "$PLUGIN_DIR/" \; | tee -a "$LOG_FILE"
-                log "Plugin-Update abgeschlossen (Overlay)."
+                log "Behalte alte Versionen für fehlgeschlagene/Fallback-Plugins und kopiere nur saubere Downloads drüber..."
+                copy_plugin_jars "$temp_dir" "$PLUGIN_DIR" "${fail_list[@]}" "${fallback_list[@]}"
+                log "Plugin-Update abgeschlossen (alte Versionen für problematische Plugins behalten)."
                 ;;
             *)
                 log "Abgebrochen: Es wurden KEINE Änderungen an den Plugins vorgenommen."
@@ -1267,9 +1663,7 @@ EOL
     else
         log "Alle Plugins erfolgreich geladen/gebaut. Ersetze alte Plugins..."
         find "$PLUGIN_DIR" -maxdepth 1 -name "*.jar" -delete
-        if compgen -G "${temp_dir}/*.jar" > /dev/null; then
-            cp -v "$temp_dir"/*.jar "$PLUGIN_DIR/" | tee -a "$LOG_FILE"
-        fi
+        copy_plugin_jars "$temp_dir" "$PLUGIN_DIR"
         log "Plugin-Update komplett."
     fi
 
@@ -1453,10 +1847,11 @@ manage_history() {
 
 main() {
     shopt -s nocasematch
+    if [[ "${1:-}" == "--history" ]]; then manage_history; exit 0; fi
+
+    init_environment
     log "Starte Update-Prozess..."
     check_dependencies
-
-    if [[ "${1:-}" == "--history" ]]; then manage_history; exit 0; fi
 
     DO_INIT=$(read_yesno_with_history "Soll ein neuer Server initialisiert werden?" "DO_INIT")
     if [[ "$DO_INIT" == "ja" ]]; then
@@ -1466,6 +1861,9 @@ main() {
             log "Erstelle vor der Initialisierung ein Backup..."
             create_backup || { log "Backup fehlgeschlagen. Abbruch."; exit 1; }
             initialize_new_server
+            if [[ "$(read_yesno_with_history "Soll die Pluginliste geändert werden?" "EDIT_PLUGIN_CONFIG")" == "ja" ]]; then
+                manage_plugin_config
+            fi
         else
             log "Initialisierung abgebrochen."
             exit 0
@@ -1518,10 +1916,13 @@ main() {
     DO_RESTORE=$(read_yesno_with_history "Soll ein Backup wiederhergestellt werden?" "DO_RESTORE")
 
     if [[ "$DO_INIT" == "ja" ]]; then
-        DO_UPDATE_PLUGINS="nein"
+        DO_UPDATE_PLUGINS=$(read_yesno_with_history "Sollen die Plugins für den neuen Server geladen werden?" "DO_UPDATE_PLUGINS")
         DO_DELETE_PLUGINS="nein"
     else
         DO_UPDATE_PLUGINS=$(read_yesno_with_history "Sollen die Plugins aktualisiert werden?" "DO_UPDATE_PLUGINS")
+        if [[ "$DO_UPDATE_PLUGINS" == "ja" && "$(read_yesno_with_history "Soll die Pluginliste vor dem Update geändert werden?" "EDIT_PLUGIN_CONFIG")" == "ja" ]]; then
+            manage_plugin_config
+        fi
         DO_DELETE_PLUGINS=$(read_yesno_with_history "Sollen die aktuellen Plugins gelöscht und gesichert werden?" "DO_DELETE_PLUGINS")
     fi
 
@@ -1562,4 +1963,3 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 fi
 
 main "$@"
-
