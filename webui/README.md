@@ -84,8 +84,8 @@ Floodgate https://github.com/GeyserMC/Floodgate
 CoreProtect https://github.com/PlayPro/CoreProtect
 ```
 
-Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem Quellcode gebaut; dafuer braucht der Host `git`
-und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
+Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem GitHub-Source-Zip gebaut; dafuer braucht der Host
+kein `git`, aber `curl`/`wget` und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
 
 ## RCON und Ports
 
