@@ -73,15 +73,19 @@ Die WebUI bearbeitet `DATA_DIR/plugins.txt`. Der Update-Button unterstuetzt im P
 - `modrinth:<slug>`
 - GitHub-Repositories mit `.jar` Asset im neuesten Release
 - direkte `http(s)` Download-Links
+- CoreProtect-Builds aus `https://github.com/PlayPro/CoreProtect` oder `https://github.com/PlayPro/CoreProtect:branch`
+- manuell hochgeladene `.jar` Dateien unter `DATA_DIR/plugins/manuell`
 
 Beispiel:
 
 ```text
 Geyser modrinth:geyser
 Floodgate https://github.com/GeyserMC/Floodgate
+CoreProtect https://github.com/PlayPro/CoreProtect
 ```
 
-Sonderfaelle aus dem grossen interaktiven Script, z. B. CoreProtect-Builds, sind hier noch nicht vollstaendig nachgebaut.
+Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem Quellcode gebaut; dafuer braucht der Host `git`
+und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
 
 ## RCON und Ports
 
