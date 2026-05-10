@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minecraft Docker WebUI</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><h1>Minecraft Docker WebUI</h1><div class="actions"><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<main>
+<aside><div id="servers"></div></aside>
+<section class="content">
+<form id="editor"></form>
+<div class="box"><h2>Portpruefung</h2><div id="warnings" class="warnings muted">Noch keine Pruefung.</div></div>
+<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button class="warn" data-action="backup">Backup</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button></div>
+<div class="box"><h2>RCON Konsole</h2><div class="actions"><input id="rconCommand" placeholder="say Hallo Welt / list / save-all"><button id="sendRcon" type="button">Senden</button></div></div>
+<div class="box"><h2>Backups</h2><div class="actions"><select id="backups"></select><button id="restoreBackup" class="warn" type="button">Restore</button><input id="importId" placeholder="neue-server-id"><button id="importBackup" type="button">Als neuen Server importieren</button></div></div>
+<div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button></div></div>
+<div class="output"><pre id="log"></pre><pre id="result"></pre></div>
+<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Minecraft Host-Port: Java-Port auf dem Host, intern 25565.
+Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
+RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
+RCON Container-Port: kann meist 25575 bleiben.
+Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
+Backups: liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
+Plugins.txt:
+  # deaktiviert eine Zeile
+  Geyser modrinth:geyser
+  Floodgate https://github.com/GeyserMC/Floodgate
+  CoreProtect https://github.com/PlayPro/CoreProtect
+  CoreProtect https://github.com/PlayPro/CoreProtect:master
+
+CoreProtect wird aus dem GitHub-Quellcode gebaut. Dafuer braucht der Host git und entweder mvn oder Docker fuer den Maven-Container.
+Manuelle Plugins werden in DATA_DIR/plugins/manuell gespeichert und beim Containerstart vom Minecraft-Server geladen.</pre><button id="closeHelp">Schliessen</button></div></dialog>
+<datalist id="versionOptions"></datalist>
+</section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
