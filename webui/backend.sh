@@ -289,31 +289,124 @@ build_coreprotect() {
     local target="$2"
     local repo="$source"
     local branch="master"
+    local owner_repo
     if [[ "$source" =~ ^(https://github.com/[^:]+):(.+)$ ]]; then
         repo="${BASH_REMATCH[1]}"
         branch="${BASH_REMATCH[2]}"
     fi
-    local srcdir
-    srcdir="$(mktemp -d)"
-    need_cmd git
-    log "CoreProtect: clone ${repo} (${branch})"
-    if ! git clone --depth 1 --branch "$branch" "$repo" "$srcdir" >/dev/null 2>&1; then
-        rm -rf "$srcdir"
-        return 1
+    owner_repo="${repo#https://github.com/}"
+    owner_repo="${owner_repo%.git}"
+    owner_repo="${owner_repo%/}"
+
+    local workdir zip srcdir plugin_yml
+    workdir="$(mktemp -d)"
+    zip="${workdir}/src.zip"
+
+    log "CoreProtect: lade Source-Archiv ${owner_repo} (${branch})"
+    if ! download_file "https://github.com/${owner_repo}/archive/refs/heads/${branch}.zip" "$zip"; then
+        log "CoreProtect: Source-Archiv konnte nicht geladen werden, versuche Release-Fallback."
+        rm -rf "$workdir"
+        download_coreprotect_release_fallback "$target"
+        return $?
     fi
-    if command -v mvn >/dev/null 2>&1; then
-        (cd "$srcdir" && mvn -q -DskipTests package)
+
+    if command -v unzip >/dev/null 2>&1; then
+        if ! unzip -q "$zip" -d "$workdir"; then
+            log "CoreProtect: Entpacken fehlgeschlagen, versuche Release-Fallback."
+            rm -rf "$workdir"
+            download_coreprotect_release_fallback "$target"
+            return $?
+        fi
     else
-        docker run --rm -v "$srcdir":/src -w /src maven:3-eclipse-temurin-21 mvn -q -DskipTests package
+        need_cmd python3
+        if ! python3 - "$zip" "$workdir" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as zf:
+    zf.extractall(sys.argv[2])
+PY
+        then
+            log "CoreProtect: Entpacken fehlgeschlagen, versuche Release-Fallback."
+            rm -rf "$workdir"
+            download_coreprotect_release_fallback "$target"
+            return $?
+        fi
+    fi
+
+    plugin_yml="$(find "$workdir" -type f -path "*/src/main/resources/plugin.yml" | head -n 1)"
+    if [[ -n "${plugin_yml:-}" ]]; then
+        srcdir="$(cd "$(dirname "$plugin_yml")/../../.." && pwd)"
+        patch_coreprotect_source "$plugin_yml" "$srcdir"
+    else
+        srcdir="$(find "$workdir" -mindepth 1 -maxdepth 2 -type f -name pom.xml -printf '%h\n' | head -n 1)"
+    fi
+
+    if [[ -z "${srcdir:-}" || ! -f "$srcdir/pom.xml" ]]; then
+        log "CoreProtect: Maven-Projektwurzel nicht gefunden, versuche Release-Fallback."
+        rm -rf "$workdir"
+        download_coreprotect_release_fallback "$target"
+        return $?
+    fi
+
+    log "CoreProtect: baue Plugin mit Maven."
+    local build_ok=0
+    if command -v mvn >/dev/null 2>&1; then
+        if (cd "$srcdir" && MAVEN_OPTS="${MAVEN_OPTS:-} -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true" mvn -B -q -DskipTests -Dmaven.compiler.source=25 -Dmaven.compiler.target=25 package); then
+            build_ok=1
+        else
+            log "CoreProtect: lokaler Maven-Build fehlgeschlagen."
+        fi
+    else
+        if docker run --rm -v "$srcdir":/src -w /src -e MAVEN_OPTS="${MAVEN_OPTS:-} -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true" maven:3.9-eclipse-temurin-25 mvn -B -q -DskipTests -Dmaven.compiler.source=25 -Dmaven.compiler.target=25 package; then
+            build_ok=1
+        else
+            log "CoreProtect: Docker-Maven-Build fehlgeschlagen."
+        fi
+    fi
+    if [[ "$build_ok" != "1" ]]; then
+        log "CoreProtect: Build fehlgeschlagen, versuche Release-Fallback."
+        rm -rf "$workdir"
+        download_coreprotect_release_fallback "$target"
+        return $?
     fi
     local jar
     jar="$(find "$srcdir" -type f -path "*/target/*.jar" ! -name "*sources*" ! -name "*javadoc*" | head -n 1)"
     if [[ -z "$jar" ]]; then
-        rm -rf "$srcdir"
-        return 1
+        log "CoreProtect: Build hat keine JAR erzeugt, versuche Release-Fallback."
+        rm -rf "$workdir"
+        download_coreprotect_release_fallback "$target"
+        return $?
     fi
     cp "$jar" "$target"
-    rm -rf "$srcdir"
+    rm -rf "$workdir"
+}
+
+patch_coreprotect_source() {
+    local plugin_yml="$1"
+    local srcdir="$2"
+    if grep -q 'branch:[[:space:]]*\${project\.branch}' "$plugin_yml"; then
+        sed -i 's/branch:[[:space:]]*\${project\.branch}/branch: developement/' "$plugin_yml"
+        log "CoreProtect: plugin.yml angepasst."
+    fi
+    if [[ -f "$srcdir/pom.xml" ]]; then
+        sed -i -E \
+            -e 's#<maven\.compiler\.source>[^<]+</maven\.compiler\.source>#<maven.compiler.source>25</maven.compiler.source>#' \
+            -e 's#<maven\.compiler\.target>[^<]+</maven\.compiler\.target>#<maven.compiler.target>25</maven.compiler.target>#' \
+            -e 's#<source>[0-9]+</source>#<source>25</source>#' \
+            -e 's#<target>[0-9]+</target>#<target>25</target>#' \
+            "$srcdir/pom.xml"
+    fi
+}
+
+download_coreprotect_release_fallback() {
+    local target="$1"
+    local url
+    url="$(github_latest_jar_url "https://github.com/PlayPro/CoreProtect" || true)"
+    if [[ -n "${url:-}" ]]; then
+        log "CoreProtect: lade offizielle Release-JAR."
+        download_file "$url" "$target" && return 0
+    fi
+    log "CoreProtect: versuche direkten Release-Download."
+    download_file "https://github.com/PlayPro/CoreProtect/releases/latest/download/CoreProtect.jar" "$target"
 }
 
 send_rcon_command() {
