@@ -79,6 +79,7 @@ Die WebUI bearbeitet `DATA_DIR/plugins.txt`. Der Update-Button unterstuetzt im P
 Beispiel:
 
 ```text
+BlueMap modrinth:bluemap
 Geyser modrinth:geyser
 Floodgate https://github.com/GeyserMC/Floodgate
 CoreProtect https://github.com/PlayPro/CoreProtect
