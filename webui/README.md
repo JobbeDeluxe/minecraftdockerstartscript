@@ -77,7 +77,7 @@ Die WebUI bearbeitet `DATA_DIR/plugins.txt`. Der Update-Button unterstuetzt im P
 - `modrinth:<slug>`
 - GitHub-Repositories mit `.jar` Asset im neuesten Release
 - direkte `http(s)` Download-Links
-- CoreProtect-Builds aus `https://github.com/PlayPro/CoreProtect` oder `https://github.com/PlayPro/CoreProtect:branch`
+- CoreProtect-Builds aus `https://github.com/PlayPro/CoreProtect`, `https://github.com/PlayPro/CoreProtect:branch` oder `build:branch`
 - manuell hochgeladene `.jar` Dateien unter `DATA_DIR/plugins/manuell`
 
 Beispiel:
@@ -86,11 +86,17 @@ Beispiel:
 BlueMap modrinth:bluemap
 Geyser modrinth:geyser
 Floodgate https://github.com/GeyserMC/Floodgate
+WorldEdit modrinth:worldedit
+DiscordSRV modrinth:discordsrv
+DiscordSRV https://download.discordsrv.com/v2/DiscordSRV/DiscordSRV/release/download/latest/jar
 CoreProtect https://github.com/PlayPro/CoreProtect
+CoreProtect build:master
 ```
 
 Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem GitHub-Source-Zip gebaut; dafuer braucht der Host
 kein `git`, aber `curl`/`wget` und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
+SpigotMC-/BukkitDev-Projektseiten sind in der Regel keine direkten JAR-Downloads. Die WebUI lehnt heruntergeladene
+Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Update dann mit Fehlercode.
 
 ## RCON und Ports
 
