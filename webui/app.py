@@ -18,6 +18,7 @@ STATIC_DIR = ROOT / "webui" / "static"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
+INIT_MARKER = STATE_DIR / ".initialized"
 SAFE_ID = re.compile(r"^[a-zA-Z0-9_.-]+$")
 PORT_RE = re.compile(r"^(\d+):(\d+)(?:/(tcp|udp))?$", re.I)
 
@@ -49,14 +50,21 @@ DEFAULT_SERVER = {
 def ensure_state():
     SERVER_DIR.mkdir(parents=True, exist_ok=True)
     RUN_DIR.mkdir(parents=True, exist_ok=True)
+    if INIT_MARKER.exists():
+        return
+    if any(SERVER_DIR.glob("*.json")):
+        INIT_MARKER.write_text("ok\n", encoding="utf-8")
+        return
     sample = SERVER_DIR / "survival.json"
-    if not sample.exists():
-        sample.write_text(json.dumps(DEFAULT_SERVER, indent=2) + "\n", encoding="utf-8")
+    sample.write_text(json.dumps(DEFAULT_SERVER, indent=2) + "\n", encoding="utf-8")
+    INIT_MARKER.write_text("ok\n", encoding="utf-8")
+
 
 def server_path(server_id):
     if not SAFE_ID.match(server_id):
         raise ValueError("invalid server id")
     return SERVER_DIR / f"{server_id}.json"
+
 
 def read_server(server_id):
     path = server_path(server_id)
@@ -65,6 +73,7 @@ def read_server(server_id):
     data = DEFAULT_SERVER.copy()
     data.update(json.loads(path.read_text(encoding="utf-8")))
     return data
+
 
 def write_server(data):
     server_id = str(data.get("id", "")).strip()
@@ -82,10 +91,14 @@ def write_server(data):
     merged["warnings"] = warnings
     return merged
 
+
 def delete_server(server_id):
+    INIT_MARKER.parent.mkdir(parents=True, exist_ok=True)
+    INIT_MARKER.write_text("ok\n", encoding="utf-8")
     path = server_path(server_id)
     if path.exists():
         path.unlink()
+
 
 def list_servers():
     ensure_state()
@@ -99,6 +112,7 @@ def list_servers():
             pass
     return out
 
+
 def run_command(args, timeout=60):
     try:
         proc = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
@@ -107,6 +121,7 @@ def run_command(args, timeout=60):
         return {"ok": False, "code": 127, "stdout": "", "stderr": str(exc)}
     except subprocess.TimeoutExpired as exc:
         return {"ok": False, "code": 124, "stdout": exc.stdout or "", "stderr": f"Command timed out after {timeout}s"}
+
 
 def docker_status(config):
     result = run_command(["docker", "inspect", config.get("container_name", ""), "--format", "{{json .State}}"], timeout=15)
@@ -117,6 +132,7 @@ def docker_status(config):
     except json.JSONDecodeError:
         return {"state": "unknown", "running": False}
     return {"state": state.get("Status", "unknown"), "running": bool(state.get("Running")), "started_at": state.get("StartedAt")}
+
 
 def parse_ports(config):
     ports = []
@@ -132,6 +148,7 @@ def parse_ports(config):
             ports.append(("extra", int(match.group(1)), (match.group(3) or "tcp").lower()))
     return ports
 
+
 def port_is_open(port, proto):
     if proto == "udp":
         return False
@@ -141,6 +158,7 @@ def port_is_open(port, proto):
         return sock.connect_ex(("127.0.0.1", int(port))) == 0
     finally:
         sock.close()
+
 
 def docker_published_ports():
     result = run_command(["docker", "ps", "--format", "{{json .}}"], timeout=15)
@@ -155,6 +173,7 @@ def docker_published_ports():
         for match in re.finditer(r":(\d+)->\d+/(tcp|udp)", str(row.get("Ports", ""))):
             used.setdefault((int(match.group(1)), match.group(2)), set()).add(row.get("Names", "unknown"))
     return used
+
 
 def port_warnings(config):
     warnings = []
@@ -190,17 +209,21 @@ def port_warnings(config):
         warnings.append("eula: Die Minecraft EULA ist noch nicht akzeptiert; Anwenden wird blockiert.")
     return warnings
 
+
 def plugins_path(config):
     return Path(config.get("data_dir", "")) / "plugins.txt"
 
+
 def manual_plugin_dir(config):
     return Path(config.get("data_dir", "")) / "plugins" / "manuell"
+
 
 def list_manual_plugins(config):
     path = manual_plugin_dir(config)
     if not path.exists():
         return []
     return sorted(p.name for p in path.glob("*.jar") if p.is_file())
+
 
 def save_manual_plugin(config, name, content_b64):
     if not name.endswith(".jar") or "/" in name or "\\" in name:
@@ -209,20 +232,28 @@ def save_manual_plugin(config, name, content_b64):
     path.mkdir(parents=True, exist_ok=True)
     (path / name).write_bytes(base64.b64decode(content_b64))
 
+
 def delete_manual_plugin(config, name):
     path = manual_plugin_dir(config) / name
     if path.exists() and path.is_file():
         path.unlink()
 
+
 def backup_root(config):
     return Path(config.get("backup_root") or Path.home() / "minecraftdocker-backups")
+
 
 def list_backups(config):
     root = backup_root(config)
     if not root.exists():
         return []
-    prefixes = {re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_") for value in (config.get("container_name"), config.get("id"), config.get("name")) if value}
+    prefixes = {
+        re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_")
+        for value in (config.get("container_name"), config.get("id"), config.get("name"))
+        if value
+    }
     archives = [p for p in root.iterdir() if p.is_file() and (p.name.endswith(".tar.gz") or p.name.endswith(".tgz"))]
+
     def archive_score(path):
         name = path.name
         if any(name.startswith(f"{prefix}_backup_") for prefix in prefixes):
@@ -230,20 +261,25 @@ def list_backups(config):
         if any(prefix and prefix in name for prefix in prefixes):
             return 1
         return 2
+
     archives.sort(key=lambda p: (archive_score(p), -p.stat().st_mtime))
     return [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in archives[:200]]
 
+
 def default_plugins_text():
     return "# Format: PluginName Quelle\n# Beispiele:\n# Geyser modrinth:geyser\n# Floodgate https://github.com/GeyserMC/Floodgate\n"
+
 
 def read_plugins(config):
     path = plugins_path(config)
     return default_plugins_text() if not path.exists() else path.read_text(encoding="utf-8", errors="replace")
 
+
 def write_plugins(config, content):
     path = plugins_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
 
 def config_env(config):
     return {
@@ -270,12 +306,14 @@ def config_env(config):
         "BACKUP_FILE": config.get("backup_file", ""),
     }
 
+
 def write_temp_env(config):
     fd, path = tempfile.mkstemp(prefix=f"{config['id']}-", suffix=".env", dir=RUN_DIR)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         for key, value in config_env(config).items():
             handle.write(f"{key}={shlex.quote(str(value))}\n")
     return path
+
 
 def run_backend_action(config, action):
     if action == "apply":
@@ -291,10 +329,12 @@ def run_backend_action(config, action):
         except OSError:
             pass
 
+
 def run_rcon_command(config, command):
     config = config.copy()
     config["rcon_command"] = command
     return run_backend_action(config, "rcon")
+
 
 def parse_player_list(result):
     text = f"{result.get('stdout', '')}\n{result.get('stderr', '')}"
@@ -305,9 +345,17 @@ def parse_player_list(result):
     if match:
         online = int(match.group(1))
         max_players = int(match.group(2))
-        tail = re.split(r"[\r\n]", match.group(3).strip(), 1)[0].strip()
+        tail = match.group(3).strip()
+        tail = re.split(r"[\r\n]", tail, 1)[0].strip()
         players = [name.strip() for name in tail.split(",") if name.strip()]
-    return {"ok": result.get("ok", False), "online": online if online is not None else len(players), "max": max_players, "players": players, "raw": text.strip()}
+    return {
+        "ok": result.get("ok", False),
+        "online": online if online is not None else len(players),
+        "max": max_players,
+        "players": players,
+        "raw": text.strip(),
+    }
+
 
 def map_upstream_base(config):
     raw = str(config.get("map_url") or "").strip()
@@ -321,14 +369,18 @@ def map_upstream_base(config):
             break
     return f"http://127.0.0.1:{port}/"
 
+
 def map_upstream_url(config, rest_path, query):
-    target = urllib.parse.urljoin(map_upstream_base(config), rest_path)
+    base = map_upstream_base(config)
+    target = urllib.parse.urljoin(base, rest_path)
     return f"{target}?{query}" if query else target
+
 
 def fetch_versions(server_type):
     server_type = (server_type or "PAPER").upper()
     if server_type in {"PAPER", "FOLIA"}:
         try:
+            import urllib.request
             with urllib.request.urlopen(f"https://fill.papermc.io/v3/projects/{server_type.lower()}", timeout=10) as resp:
                 data = json.load(resp)
             versions = []
@@ -343,12 +395,14 @@ def fetch_versions(server_type):
             return ["LATEST"]
     if server_type == "PURPUR":
         try:
+            import urllib.request
             with urllib.request.urlopen("https://api.purpurmc.org/v2/purpur", timeout=10) as resp:
                 data = json.load(resp)
             return ["LATEST"] + sorted(set(data.get("versions", [])), reverse=True)[:20]
         except Exception:
             return ["LATEST"]
     return ["LATEST", "1.21.10", "1.21.9", "1.21.8", "1.21.7", "1.21.6", "1.21.5", "1.21.4"]
+
 
 class Handler(BaseHTTPRequestHandler):
     def send_file(self, path, content_type):
@@ -438,7 +492,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.send_json(run_backend_action(read_server(parts[2]), action))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "rcon":
-                self.send_json(run_rcon_command(read_server(parts[2]), self.read_json().get("command", "")))
+                body = self.read_json()
+                self.send_json(run_rcon_command(read_server(parts[2]), body.get("command", "")))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "restore":
                 body = self.read_json()
                 config = read_server(parts[2])
@@ -456,7 +511,16 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 server_id = body.get("id", "").strip()
                 data = DEFAULT_SERVER.copy()
-                data.update({"id": server_id, "name": server_id, "container_name": f"mc-{server_id}", "data_dir": f"/opt/minecraft/{server_id}", "host_port": "25566", "rcon_host_port": "25576", "backup_file": str(source), "eula_accepted": True})
+                data.update({
+                    "id": server_id,
+                    "name": server_id,
+                    "container_name": f"mc-{server_id}",
+                    "data_dir": f"/opt/minecraft/{server_id}",
+                    "host_port": "25566",
+                    "rcon_host_port": "25576",
+                    "backup_file": str(source),
+                    "eula_accepted": True,
+                })
                 saved = write_server(data)
                 result = run_backend_action(saved | {"backup_file": str(source)}, "restore")
                 self.send_json({"message": "Backup als neues Serverprofil importiert.", "result": result, "server": saved})
@@ -483,6 +547,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args))
 
+
 def main():
     ensure_state()
     host = os.environ.get("MCDOCKER_WEBUI_HOST", "127.0.0.1")
@@ -490,6 +555,7 @@ def main():
     print(f"Minecraft Docker WebUI: http://{host}:{port}")
     print(f"State directory: {STATE_DIR}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
+
 
 if __name__ == "__main__":
     main()
