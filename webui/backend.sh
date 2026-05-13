@@ -190,6 +190,30 @@ download_file() {
     fi
 }
 
+is_jar_file() {
+    local file="$1"
+    [[ -s "$file" ]] || return 1
+    python3 - "$file" <<'PY'
+import sys
+from pathlib import Path
+data = Path(sys.argv[1]).read_bytes()[:4]
+raise SystemExit(0 if data.startswith(b"PK\x03\x04") else 1)
+PY
+}
+
+download_plugin_jar() {
+    local url="$1"
+    local target="$2"
+    rm -f "$target"
+    if ! download_file "$url" "$target"; then
+        return 1
+    fi
+    if ! is_jar_file "$target"; then
+        rm -f "$target"
+        return 2
+    fi
+}
+
 github_latest_jar_url() {
     local repo="$1"
     need_cmd python3
@@ -237,7 +261,10 @@ update_plugins() {
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' RETURN
 
-    local line name source url target
+    local line name source url target failed updated skipped
+    failed=0
+    updated=0
+    skipped=0
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line%%$'\r'}"
         [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]] && continue
@@ -248,11 +275,17 @@ update_plugins() {
         url=""
 
         log "Plugin ${name}: ermittle Download aus ${source}"
+        if [[ "${name,,}" == "coreprotect" && "$source" == build:* ]]; then
+            source="https://github.com/PlayPro/CoreProtect:${source#build:}"
+            log "Plugin ${name}: nutze CoreProtect-Source-Build ${source}"
+        fi
         if [[ "${name,,}" == "coreprotect" && "$source" == https://github.com/* ]]; then
             if build_coreprotect "$source" "$target"; then
                 cp "$target" "$PLUGIN_DIR/"
+                updated=$((updated + 1))
                 log "Plugin ${name}: aus Source gebaut und aktualisiert."
             else
+                failed=$((failed + 1))
                 log "Plugin ${name}: Build fehlgeschlagen."
             fi
             continue
@@ -265,16 +298,23 @@ update_plugins() {
         fi
 
         if [[ -z "$url" ]]; then
+            failed=$((failed + 1))
             log "Plugin ${name}: keine unterstuetzte Download-URL gefunden."
             continue
         fi
-        if download_file "$url" "$target"; then
+        if download_plugin_jar "$url" "$target"; then
             cp "$target" "$PLUGIN_DIR/"
+            updated=$((updated + 1))
             log "Plugin ${name}: aktualisiert."
         else
-            log "Plugin ${name}: Download fehlgeschlagen."
+            failed=$((failed + 1))
+            log "Plugin ${name}: Download fehlgeschlagen oder Ergebnis war keine JAR-Datei."
         fi
     done < "$PLUGIN_CONFIG"
+    log "Plugin-Update abgeschlossen: ${updated} aktualisiert, ${failed} fehlgeschlagen, ${skipped} uebersprungen."
+    if (( failed > 0 )); then
+        return 1
+    fi
 }
 
 sync_manual_plugins() {
@@ -403,10 +443,10 @@ download_coreprotect_release_fallback() {
     url="$(github_latest_jar_url "https://github.com/PlayPro/CoreProtect" || true)"
     if [[ -n "${url:-}" ]]; then
         log "CoreProtect: lade offizielle Release-JAR."
-        download_file "$url" "$target" && return 0
+        download_plugin_jar "$url" "$target" && return 0
     fi
     log "CoreProtect: versuche direkten Release-Download."
-    download_file "https://github.com/PlayPro/CoreProtect/releases/latest/download/CoreProtect.jar" "$target"
+    download_plugin_jar "https://github.com/PlayPro/CoreProtect/releases/latest/download/CoreProtect.jar" "$target"
 }
 
 send_rcon_command() {
