@@ -281,6 +281,31 @@ def write_plugins(config, content):
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+def server_properties_path(config):
+    return Path(config.get("data_dir", "")) / "server.properties"
+
+
+def read_server_properties(config):
+    path = server_properties_path(config)
+    if not path.exists():
+        return "# server.properties wurde noch nicht gefunden.\n# Der Minecraft-Container legt die Datei meist beim ersten Start an.\n"
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def write_server_properties(config, content):
+    path = server_properties_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def read_action_log(config, lines=200):
+    path = Path(config.get("data_dir", "")) / "update_log.txt"
+    if not path.exists():
+        return ""
+    content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return "\n".join(content[-lines:])
+
+
 def config_env(config):
     return {
         "DATA_DIR": config.get("data_dir", ""),
@@ -455,6 +480,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(run_backend_action(read_server(parts[2]), "logs"))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugins":
                 self.send_json({"content": read_plugins(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "properties":
+                self.send_json({"content": read_server_properties(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action-log":
+                self.send_json({"content": read_action_log(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "ports":
                 self.send_json({"warnings": port_warnings(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "backups":
@@ -485,6 +514,9 @@ class Handler(BaseHTTPRequestHandler):
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugins":
                 write_plugins(read_server(parts[2]), self.read_json().get("content", ""))
                 self.send_json({"message": "plugins.txt gespeichert."})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "properties":
+                write_server_properties(read_server(parts[2]), self.read_json().get("content", ""))
+                self.send_json({"message": "server.properties gespeichert. Einige Einstellungen brauchen einen Restart."})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action":
                 action = self.read_json().get("action", "apply")
                 if action not in {"apply", "start", "stop", "restart", "backup", "plugins"}:
