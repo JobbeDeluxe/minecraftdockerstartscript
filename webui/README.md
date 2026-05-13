@@ -32,6 +32,9 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - Offensichtliche Port-Konflikte zwischen Profilen, laufenden Docker-Containern und TCP-Ports anzeigen
 - `plugins.txt` im Web bearbeiten und einfache Plugin-Updates ausloesen
 - Containerstatus, einfache Docker-Stats und Logs anzeigen
+- Spieleranzahl und einfache Spielerliste per RCON `list` anzeigen
+- RCON-Schnellbefehle fuer `tp`, `give`, `kick`, `ban` und `pardon`
+- BlueMap ueber die WebUI unter `/map/<server-id>/` proxien und einbetten
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 
 ## Backend-Modus
@@ -102,8 +105,10 @@ Lobby:    25577:25575
 Fuer Geyser oder VoiceChat die UDP-Ports in `Extra Ports` setzen, z. B. `19132:19132/udp`. Die WebUI warnt bei offensichtlichen Kollisionen, passt Plugin-Konfigurationsdateien aber noch nicht automatisch an.
 
 Fuer BlueMap `BlueMap modrinth:bluemap` in `plugins.txt` setzen und den Web-Port mappen, z. B. `8100:8100/tcp`.
-Der Button `BlueMap oeffnen` nutzt optional `BlueMap URL`; wenn das Feld leer ist, oeffnet er automatisch den aktuellen
-WebUI-Host mit Port `8100` oder den Host-Port aus einem Mapping wie `8123:8100/tcp`.
+Der Button `BlueMap oeffnen` und `BlueMap einbetten` laufen ueber den WebUI-Proxy unter `/map/<server-id>/`.
+Dadurch reicht spaeter ein Reverse Proxy auf die WebUI; der Browser muss den BlueMap-Port nicht direkt erreichen.
+`BlueMap URL` ist der optionale Upstream fuer die WebUI, z. B. `http://127.0.0.1:8100/`. Wenn das Feld leer ist,
+nutzt die WebUI lokal `127.0.0.1:8100` oder den Host-Port aus einem Mapping wie `8123:8100/tcp`.
 
 ## Sicherheit
 
