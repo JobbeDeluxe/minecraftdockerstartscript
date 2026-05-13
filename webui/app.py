@@ -33,6 +33,7 @@ DEFAULT_SERVER = {
     "paper_channel": "default",
     "host_port": "25565",
     "extra_ports": "",
+    "map_url": "",
     "docker_image": "itzg/minecraft-server",
     "eula_accepted": False,
     "backup_before_apply": False,
@@ -328,9 +329,7 @@ def fetch_versions(server_type):
             with urllib.request.urlopen(f"https://fill.papermc.io/v3/projects/{server_type.lower()}", timeout=10) as resp:
                 data = json.load(resp)
             versions = []
-            for key, group in data.get("versions", {}).items():
-                if not str(key).startswith("1."):
-                    continue
+            for group in data.get("versions", {}).values():
                 versions.extend(group)
             unique = []
             for version in versions:
