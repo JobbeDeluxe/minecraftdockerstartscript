@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI</h1><div class="actions"><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI</h1><div class="actions"><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -20,9 +20,12 @@
 <div class="box"><h2>Backups</h2><div class="actions"><select id="backups"></select><button id="restoreBackup" class="warn" type="button">Restore</button><input id="importId" placeholder="neue-server-id"><button id="importBackup" type="button">Als neuen Server importieren</button></div></div>
 <div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button></div></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
-<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Minecraft Host-Port: Java-Port auf dem Host, intern 25565.
+<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
+Name: Anzeigename in der WebUI.
+Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruefungen erkennt.
+Minecraft Host-Port: Java-Port auf dem Host, intern 25565.
 Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
-BlueMap URL: optionaler Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/. Leer lassen nutzt lokal 127.0.0.1:8100 oder den Host-Port aus Extra Ports wie 8123:8100/tcp.
+BlueMap URL: optionaler interner Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/. Leer lassen nutzt lokal 127.0.0.1:8100 oder den Host-Port aus Extra Ports wie 8123:8100/tcp. Hier gehoert keine oeffentliche Proxy-URL rein, sondern die Adresse, die der WebUI-Host erreichen kann.
 BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch auch hinter einem Reverse Proxy zur WebUI.
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
