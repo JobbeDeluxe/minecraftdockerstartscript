@@ -44,7 +44,6 @@ DEFAULT_SERVER = {
     "backup_root": str(Path.home() / "minecraftdocker-backups"),
 }
 
-
 def ensure_state():
     SERVER_DIR.mkdir(parents=True, exist_ok=True)
     RUN_DIR.mkdir(parents=True, exist_ok=True)
@@ -238,8 +237,23 @@ def list_backups(config):
     root = backup_root(config)
     if not root.exists():
         return []
-    prefix = re.sub(r"[^A-Za-z0-9_.-]+", "_", config.get("container_name", config.get("id", "")))
-    return [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in sorted(root.glob(f"{prefix}_backup_*.tar.gz"), reverse=True)]
+    prefixes = {
+        re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_")
+        for value in (config.get("container_name"), config.get("id"), config.get("name"))
+        if value
+    }
+    archives = [p for p in root.iterdir() if p.is_file() and (p.name.endswith(".tar.gz") or p.name.endswith(".tgz"))]
+
+    def archive_score(path):
+        name = path.name
+        if any(name.startswith(f"{prefix}_backup_") for prefix in prefixes):
+            return 0
+        if any(prefix and prefix in name for prefix in prefixes):
+            return 1
+        return 2
+
+    archives.sort(key=lambda p: (archive_score(p), -p.stat().st_mtime))
+    return [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in archives[:200]]
 
 
 def default_plugins_text():
@@ -314,9 +328,15 @@ def fetch_versions(server_type):
             with urllib.request.urlopen(f"https://fill.papermc.io/v3/projects/{server_type.lower()}", timeout=10) as resp:
                 data = json.load(resp)
             versions = []
-            for group in data.get("versions", {}).values():
+            for key, group in data.get("versions", {}).items():
+                if not str(key).startswith("1."):
+                    continue
                 versions.extend(group)
-            return ["LATEST"] + sorted(set(versions), reverse=True)[:20]
+            unique = []
+            for version in versions:
+                if version not in unique:
+                    unique.append(version)
+            return ["LATEST"] + unique[:30]
         except Exception:
             return ["LATEST"]
     if server_type == "PURPUR":
