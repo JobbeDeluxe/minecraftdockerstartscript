@@ -56,7 +56,8 @@ TYPE=PAPER
 VERSION=LATEST
 PAPER_CHANNEL=default
 HOST_PORT=25565
-EXTRA_PORTS=19132:19132/udp,24454:24454/udp
+EXTRA_PORTS=19132:19132/udp,24454:24454/udp,8100:8100/tcp
+MAP_URL=
 EULA_ACCEPTED=ja
 RCON_ENABLED=ja
 RCON_PASSWORD=bitte-aendern
@@ -99,6 +100,10 @@ Lobby:    25577:25575
 ```
 
 Fuer Geyser oder VoiceChat die UDP-Ports in `Extra Ports` setzen, z. B. `19132:19132/udp`. Die WebUI warnt bei offensichtlichen Kollisionen, passt Plugin-Konfigurationsdateien aber noch nicht automatisch an.
+
+Fuer BlueMap `BlueMap modrinth:bluemap` in `plugins.txt` setzen und den Web-Port mappen, z. B. `8100:8100/tcp`.
+Der Button `BlueMap oeffnen` nutzt optional `BlueMap URL`; wenn das Feld leer ist, oeffnet er automatisch den aktuellen
+WebUI-Host mit Port `8100` oder den Host-Port aus einem Mapping wie `8123:8100/tcp`.
 
 ## Sicherheit
 
