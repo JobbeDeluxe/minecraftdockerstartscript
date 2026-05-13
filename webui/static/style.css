@@ -15,8 +15,9 @@ aside{border-right:1px solid var(--line);padding:14px;background:#14191f}
 form,.grid{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:12px;align-items:end;margin-bottom:16px}
 label{display:grid;gap:5px;color:var(--muted);font-size:12px}
 input,select,textarea{width:100%;min-height:36px;border:1px solid var(--line);border-radius:6px;background:#101419;color:var(--text);padding:7px 9px;font:inherit}
-.field-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.field-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,auto) auto;gap:8px}
 .field-row button{white-space:nowrap}
+.field-help{color:var(--muted);font-size:11px;line-height:1.3}
 .wide{grid-column:span 2}.full{grid-column:1/-1}
 .checks{display:flex;gap:14px;align-items:center;min-height:36px;color:var(--text);flex-wrap:wrap}
 .checks label{display:flex;flex-direction:row;align-items:center;gap:7px;color:var(--text)}
