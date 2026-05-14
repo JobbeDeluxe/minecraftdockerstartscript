@@ -325,6 +325,16 @@ download_griefprevention_latest() {
     download_plugin_jar "https://github.com/TechFortress/GriefPrevention/releases/latest/download/GriefPrevention.jar" "$target"
 }
 
+install_plugin_jar() {
+    local name="$1"
+    local source="$2"
+    local target="${PLUGIN_DIR}/${name}.jar"
+    cp -f "$source" "$target"
+    local size
+    size="$(wc -c < "$target" 2>/dev/null || printf '?')"
+    log "Plugin ${name}: gespeichert nach ${target} (${size} Bytes)."
+}
+
 update_plugins() {
     mkdir -p "$PLUGIN_DIR"
     sync_manual_plugins
@@ -356,7 +366,7 @@ update_plugins() {
         fi
         if [[ "${name,,}" == "coreprotect" && "$source" == https://github.com/* ]]; then
             if build_coreprotect "$source" "$target"; then
-                cp "$target" "$PLUGIN_DIR/"
+                install_plugin_jar "$name" "$target"
                 updated=$((updated + 1))
                 log "Plugin ${name}: aus Source gebaut und aktualisiert."
             else
@@ -384,7 +394,7 @@ update_plugins() {
                 url="$(modrinth_latest_jar_url "$fallback_slug" || true)"
             elif [[ "${name,,}" == "griefprevention" ]]; then
                 if download_griefprevention_latest "$target"; then
-                    cp "$target" "$PLUGIN_DIR/"
+                    install_plugin_jar "$name" "$target"
                     updated=$((updated + 1))
                     log "Plugin ${name}: per Fallback aktualisiert."
                 else
@@ -407,7 +417,7 @@ update_plugins() {
             continue
         fi
         if download_plugin_jar "$url" "$target"; then
-            cp "$target" "$PLUGIN_DIR/"
+            install_plugin_jar "$name" "$target"
             updated=$((updated + 1))
             log "Plugin ${name}: aktualisiert."
         else
