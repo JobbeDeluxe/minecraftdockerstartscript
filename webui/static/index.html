@@ -19,7 +19,7 @@
 <div class="box"><h2>RCON Konsole</h2><div class="actions"><input id="rconCommand" placeholder="say Hallo Welt / list / save-all"><button id="sendRcon" type="button">Senden</button></div></div>
 <div class="box"><h2>Backups</h2><div class="actions"><select id="backups"></select><button id="restoreBackup" class="warn" type="button">Restore</button><input id="importId" placeholder="neue-server-id"><button id="importBackup" type="button">Als neuen Server importieren</button></div></div>
 <div class="box"><h2>server.properties <span id="propertiesDirty" class="warnings"></span></h2><textarea id="serverProperties" spellcheck="false"></textarea><div class="actions"><button id="saveProperties" type="button">server.properties speichern</button><button id="reloadProperties" type="button">Neu laden</button></div></div>
-<div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button></div></div>
+<div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button><button id="refreshInstalledPlugins" type="button">Installierte Plugins laden</button></div><pre id="installedPlugins" class="small-output"></pre></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
 Name: Anzeigename in der WebUI.
@@ -31,8 +31,8 @@ BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch 
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
 Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
+Version/RAM/Ports/Image: Speichern aendert nur das WebUI-Profil. Erst Anwenden erstellt den Docker-Container mit diesen neuen Werten neu. Restart startet nur den bestehenden Container neu.
 Backups: liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
-server.properties: echte Minecraft-Servereinstellungen wie motd, level-name, difficulty, gamemode, max-players oder view-distance. Viele Werte brauchen einen Restart.
 Plugins.txt:
   # deaktiviert eine Zeile
   BlueMap modrinth:bluemap
