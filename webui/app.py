@@ -237,6 +237,67 @@ def list_installed_plugins(config):
     return plugins
 
 
+def delete_installed_plugin(config, name):
+    if "/" in name or "\\" in name or not name.endswith(".jar"):
+        raise ValueError("Nur .jar-Dateien ohne Pfad sind erlaubt.")
+    path = Path(config.get("data_dir", "")) / "plugins" / name
+    if path.exists() and path.is_file():
+        path.unlink()
+
+
+EDITABLE_EXTENSIONS = {".conf", ".cfg", ".json", ".properties", ".txt", ".toml", ".yml", ".yaml"}
+
+
+def plugin_file_roots(config):
+    data_dir = Path(config.get("data_dir", "")).resolve()
+    return [data_dir / "plugins", data_dir / "config"]
+
+
+def safe_plugin_file(config, relative_path):
+    rel = Path(str(relative_path).replace("\\", "/"))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("Ungueltiger Plugin-Dateipfad.")
+    if rel.suffix.lower() not in EDITABLE_EXTENSIONS:
+        raise ValueError("Nur typische Text-Konfigdateien koennen bearbeitet werden.")
+    data_dir = Path(config.get("data_dir", "")).resolve()
+    target = (data_dir / rel).resolve()
+    roots = [root.resolve() for root in plugin_file_roots(config)]
+    if not any(target == root or root in target.parents for root in roots):
+        raise ValueError("Plugin-Dateien duerfen nur unter plugins/ oder config/ liegen.")
+    return target
+
+
+def list_plugin_files(config):
+    data_dir = Path(config.get("data_dir", "")).resolve()
+    files = []
+    for root in plugin_file_roots(config):
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in EDITABLE_EXTENSIONS:
+                continue
+            stat = path.stat()
+            if stat.st_size > 1024 * 1024:
+                continue
+            files.append({"path": path.resolve().relative_to(data_dir).as_posix(), "size": stat.st_size})
+    return files[:500]
+
+
+def read_plugin_file(config, relative_path):
+    path = safe_plugin_file(config, relative_path)
+    if not path.exists():
+        raise FileNotFoundError(str(relative_path))
+    if path.stat().st_size > 1024 * 1024:
+        raise ValueError("Datei ist groesser als 1 MiB und wird nicht im Browser editiert.")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def write_plugin_file(config, relative_path, content):
+    path = safe_plugin_file(config, relative_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(content).rstrip() + "\n", encoding="utf-8")
+
+
 def save_manual_plugin(config, name, content_b64):
     if not name.endswith(".jar") or "/" in name or "\\" in name:
         raise ValueError("Nur .jar-Dateien ohne Pfad sind erlaubt.")
@@ -504,6 +565,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"plugins": list_manual_plugins(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "installed-plugins":
                 self.send_json({"plugins": list_installed_plugins(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugin-files":
+                self.send_json({"files": list_plugin_files(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugin-file":
+                query = urllib.parse.parse_qs(parsed.query)
+                rel_path = query.get("path", [""])[0]
+                self.send_json({"path": rel_path, "content": read_plugin_file(read_server(parts[2]), rel_path)})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "players":
                 self.send_json(parse_player_list(run_rcon_command(read_server(parts[2]), "list")))
             elif parts == ["api", "versions"]:
@@ -549,6 +616,10 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.read_json()
                 save_manual_plugin(read_server(parts[2]), body.get("name", ""), body.get("content", ""))
                 self.send_json({"message": "Manuelles Plugin hochgeladen."})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugin-file":
+                body = self.read_json()
+                write_plugin_file(read_server(parts[2]), body.get("path", ""), body.get("content", ""))
+                self.send_json({"message": "Plugin-Konfig gespeichert. Plugin oder Server muss ggf. neu geladen werden."})
             elif parts == ["api", "backups", "import"]:
                 body = self.read_json()
                 source = Path(body.get("file", ""))
@@ -585,6 +656,9 @@ class Handler(BaseHTTPRequestHandler):
             elif len(parts) == 5 and parts[:2] == ["api", "servers"] and parts[3] == "manual-plugins":
                 delete_manual_plugin(read_server(parts[2]), urllib.parse.unquote(parts[4]))
                 self.send_json({"message": "Manuelles Plugin geloescht."})
+            elif len(parts) == 5 and parts[:2] == ["api", "servers"] and parts[3] == "installed-plugins":
+                delete_installed_plugin(read_server(parts[2]), urllib.parse.unquote(parts[4]))
+                self.send_json({"message": "Installiertes Plugin geloescht. Restart noetig, falls der Server laeuft."})
             else:
                 self.send_json({"error": "not found"}, 404)
         except Exception as exc:
