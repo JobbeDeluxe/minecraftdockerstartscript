@@ -183,10 +183,13 @@ download_file() {
     local url="$1"
     local target="$2"
     if command -v curl >/dev/null 2>&1; then
-        curl -fL "$url" -o "$target"
+        curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 \
+            -H "Accept: application/octet-stream,*/*;q=0.8" \
+            -A "minecraftdockerstartscript/1.0 (+https://github.com/JobbeDeluxe/minecraftdockerstartscript)" \
+            -o "$target" "$url"
     else
         need_cmd wget
-        wget -O "$target" "$url"
+        wget -q --user-agent="minecraftdockerstartscript/1.0 (+https://github.com/JobbeDeluxe/minecraftdockerstartscript)" -O "$target" "$url"
     fi
 }
 
@@ -219,7 +222,9 @@ github_latest_jar_url() {
     need_cmd python3
     python3 - "$repo" <<'PY'
 import json, sys, urllib.request
-repo = sys.argv[1].strip().removeprefix("https://github.com/").strip("/")
+repo = sys.argv[1].strip()
+repo = repo.removeprefix("https://github.com/").removeprefix("http://github.com/").strip("/")
+repo = repo.removesuffix(".git")
 url = f"https://api.github.com/repos/{repo}/releases/latest"
 req = urllib.request.Request(url, headers={"User-Agent": "minecraftdocker-webui"})
 with urllib.request.urlopen(req, timeout=20) as resp:
@@ -234,20 +239,90 @@ PY
 
 modrinth_latest_jar_url() {
     local slug="${1#modrinth:}"
+    local channels="${2:-release,beta,alpha}"
     need_cmd python3
-    python3 - "$slug" <<'PY'
+    python3 - "$slug" "$channels" <<'PY'
 import json, sys, urllib.parse, urllib.request
 slug = sys.argv[1]
-url = "https://api.modrinth.com/v2/project/%s/version?loaders=[%%22paper%%22,%%22spigot%%22,%%22bukkit%%22]&featured=false" % urllib.parse.quote(slug)
+channels = [c.strip() for c in sys.argv[2].split(",") if c.strip()]
+preferred_loaders = {"paper", "spigot", "bukkit", "purpur"}
+url = "https://api.modrinth.com/v2/project/%s/version" % urllib.parse.quote(slug)
 req = urllib.request.Request(url, headers={"User-Agent": "minecraftdocker-webui"})
 with urllib.request.urlopen(req, timeout=20) as resp:
     versions = json.load(resp)
-for version in versions:
-    for file in version.get("files", []):
-        if file.get("filename", "").lower().endswith(".jar"):
-            print(file["url"])
-            raise SystemExit
+for channel in channels:
+    channel_versions = [v for v in versions if v.get("version_type") == channel]
+    for version in channel_versions:
+        loaders = set(version.get("loaders") or [])
+        if not loaders.intersection(preferred_loaders):
+            continue
+        for file in version.get("files", []):
+            if file.get("filename", "").lower().endswith(".jar"):
+                print(file["url"])
+                raise SystemExit
+    for version in channel_versions:
+        for file in version.get("files", []):
+            if file.get("filename", "").lower().endswith(".jar"):
+                print(file["url"])
+                raise SystemExit
+raise SystemExit(1)
 PY
+}
+
+extract_spigot_resource_id() {
+    local url="$1"
+    url="${url#http://}"
+    url="${url#https://}"
+    url="${url#www.}"
+    if [[ "$url" =~ ^spigotmc\.org/resources/[^/]*\.([0-9]+)(/.*)?$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    return 1
+}
+
+spiget_latest_download_url() {
+    local id="$1"
+    echo "https://api.spiget.org/v2/resources/${id}/download"
+}
+
+extract_modrinth_slug() {
+    local url="$1"
+    url="${url#http://}"
+    url="${url#https://}"
+    url="${url#www.}"
+    if [[ "$url" =~ ^modrinth\.com/(plugin|project|mod)/([A-Za-z0-9._-]+) ]]; then
+        echo "${BASH_REMATCH[2]}"
+        return 0
+    fi
+    return 1
+}
+
+bukkit_modrinth_slug_fallback() {
+    local plugin_name="$1"
+    case "${plugin_name,,}" in
+        worldedit|world-edit)
+            echo "worldedit"
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+download_griefprevention_latest() {
+    local target="$1"
+    local url
+    url="$(modrinth_latest_jar_url "griefprevention" || true)"
+    if [[ -n "${url:-}" ]] && download_plugin_jar "$url" "$target"; then
+        log "GriefPrevention: Fallback ueber Modrinth erfolgreich."
+        return 0
+    fi
+    url="$(github_latest_jar_url "TechFortress/GriefPrevention" || true)"
+    if [[ -n "${url:-}" ]] && download_plugin_jar "$url" "$target"; then
+        log "GriefPrevention: Fallback ueber GitHub Releases erfolgreich."
+        return 0
+    fi
+    download_plugin_jar "https://github.com/TechFortress/GriefPrevention/releases/latest/download/GriefPrevention.jar" "$target"
 }
 
 update_plugins() {
@@ -261,7 +336,7 @@ update_plugins() {
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' RETURN
 
-    local line name source url target failed updated skipped
+    local line name source url target failed updated skipped spec slug channels rid fallback_slug
     failed=0
     updated=0
     skipped=0
@@ -290,7 +365,36 @@ update_plugins() {
             fi
             continue
         elif [[ "$source" == modrinth:* ]]; then
-            url="$(modrinth_latest_jar_url "$source" || true)"
+            spec="${source#modrinth:}"
+            slug="${spec%@*}"
+            channels="${spec#*@}"
+            [[ "$channels" == "$slug" ]] && channels=""
+            url="$(modrinth_latest_jar_url "$slug" "$channels" || true)"
+        elif [[ "$source" == *"modrinth.com/plugin/"* || "$source" == *"modrinth.com/project/"* || "$source" == *"modrinth.com/mod/"* ]]; then
+            if slug="$(extract_modrinth_slug "$source")"; then
+                url="$(modrinth_latest_jar_url "$slug" || true)"
+            fi
+        elif [[ "$source" == *"spigotmc.org/resources/"* ]]; then
+            if rid="$(extract_spigot_resource_id "$source")"; then
+                url="$(spiget_latest_download_url "$rid")"
+            fi
+        elif [[ "$source" == *"dev.bukkit.org"* ]]; then
+            if fallback_slug="$(bukkit_modrinth_slug_fallback "$name")"; then
+                log "Plugin ${name}: DevBukkit blockiert oft Direktdownloads, versuche Modrinth-Fallback (${fallback_slug})."
+                url="$(modrinth_latest_jar_url "$fallback_slug" || true)"
+            elif [[ "${name,,}" == "griefprevention" ]]; then
+                if download_griefprevention_latest "$target"; then
+                    cp "$target" "$PLUGIN_DIR/"
+                    updated=$((updated + 1))
+                    log "Plugin ${name}: per Fallback aktualisiert."
+                else
+                    failed=$((failed + 1))
+                    log "Plugin ${name}: Fallback-Download fehlgeschlagen."
+                fi
+                continue
+            else
+                url="$source"
+            fi
         elif [[ "$source" == https://github.com/* ]]; then
             url="$(github_latest_jar_url "$source" || true)"
         elif [[ "$source" == http://* || "$source" == https://* ]]; then
