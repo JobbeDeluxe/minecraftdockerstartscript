@@ -225,6 +225,18 @@ def list_manual_plugins(config):
     return sorted(p.name for p in path.glob("*.jar") if p.is_file())
 
 
+def list_installed_plugins(config):
+    path = Path(config.get("data_dir", "")) / "plugins"
+    if not path.exists():
+        return []
+    plugins = []
+    for jar in sorted(path.glob("*.jar")):
+        if jar.is_file():
+            stat = jar.stat()
+            plugins.append({"name": jar.name, "path": str(jar), "size": stat.st_size, "mtime": stat.st_mtime})
+    return plugins
+
+
 def save_manual_plugin(config, name, content_b64):
     if not name.endswith(".jar") or "/" in name or "\\" in name:
         raise ValueError("Nur .jar-Dateien ohne Pfad sind erlaubt.")
@@ -490,6 +502,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"backups": list_backups(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "manual-plugins":
                 self.send_json({"plugins": list_manual_plugins(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "installed-plugins":
+                self.send_json({"plugins": list_installed_plugins(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "players":
                 self.send_json(parse_player_list(run_rcon_command(read_server(parts[2]), "list")))
             elif parts == ["api", "versions"]:
