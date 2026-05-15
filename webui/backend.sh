@@ -93,6 +93,11 @@ stop_server() {
 }
 
 start_server() {
+    if ! docker inspect "$SERVER_NAME" >/dev/null 2>&1; then
+        log "Container ${SERVER_NAME} wurde noch nicht gefunden; erstelle ihn mit Anwenden."
+        apply_container
+        return
+    fi
     log "Starte Server ${SERVER_NAME}..."
     docker start "$SERVER_NAME"
 }
