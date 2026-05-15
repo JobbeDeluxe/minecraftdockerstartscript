@@ -1,6 +1,10 @@
 # Minecraft Docker WebUI
 
-Kleiner Host-WebUI-Prototyp fuer Minecraft-Server in Docker. Die WebUI speichert Serverprofile als JSON unter
+Version: `v1.0.0-rc1`
+
+GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
+
+Host-WebUI fuer Minecraft-Server in Docker. Die WebUI speichert Serverprofile als JSON unter
 `~/.minecraftdocker-webui/servers`, schreibt daraus temporaere Shell-Config-Dateien und ruft `webui/backend.sh`
 nicht-interaktiv auf.
 
@@ -77,7 +81,7 @@ Die WebUI bearbeitet `DATA_DIR/plugins.txt`. Der Update-Button unterstuetzt im P
 - `modrinth:<slug>`
 - GitHub-Repositories mit `.jar` Asset im neuesten Release
 - direkte `http(s)` Download-Links
-- CoreProtect-Builds aus `https://github.com/PlayPro/CoreProtect`, `https://github.com/PlayPro/CoreProtect:branch` oder `build:branch`
+- CoreProtect-Builds aus `https://github.com/PlayPro/CoreProtect` oder `https://github.com/PlayPro/CoreProtect:branch`
 - manuell hochgeladene `.jar` Dateien unter `DATA_DIR/plugins/manuell`
 
 Beispiel:
