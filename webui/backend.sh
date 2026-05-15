@@ -72,6 +72,44 @@ BACKUP_FILE="${BACKUP_FILE:-}"
 
 mkdir -p "$DATA_DIR" "$PLUGIN_DIR" "$BACKUP_DIR"
 
+is_proxy_type() {
+    case "${TYPE^^}" in
+        BUNGEECORD|WATERFALL|VELOCITY)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+container_data_mount() {
+    if is_proxy_type; then
+        printf "/server"
+    else
+        printf "/data"
+    fi
+}
+
+container_game_port() {
+    case "${TYPE^^}" in
+        BUNGEECORD|WATERFALL)
+            printf "25577"
+            ;;
+        *)
+            printf "25565"
+            ;;
+    esac
+}
+
+normalize_image_for_type() {
+    if is_proxy_type; then
+        if [[ -z "${DOCKER_IMAGE:-}" || "$DOCKER_IMAGE" == "itzg/minecraft-server" ]]; then
+            DOCKER_IMAGE="itzg/mc-proxy"
+        fi
+    elif [[ -z "${DOCKER_IMAGE:-}" || "$DOCKER_IMAGE" == "itzg/mc-proxy" ]]; then
+        DOCKER_IMAGE="itzg/minecraft-server"
+    fi
+}
+
 log() {
     printf "%s - %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" | tee -a "$LOG_FILE"
 }
@@ -126,7 +164,8 @@ restore_backup() {
 }
 
 apply_container() {
-    if [[ "$EULA_ACCEPTED" != "ja" ]]; then
+    normalize_image_for_type
+    if ! is_proxy_type && [[ "$EULA_ACCEPTED" != "ja" ]]; then
         log "Fehler: Minecraft EULA wurde in diesem Profil noch nicht akzeptiert."
         exit 2
     fi
@@ -137,7 +176,11 @@ apply_container() {
     log "Entferne alten Docker-Container ${SERVER_NAME}..."
     docker rm "$SERVER_NAME" >/dev/null 2>&1 || true
 
-    local docker_args=(-d -p "${HOST_PORT}:25565")
+    local mount_path game_port
+    mount_path="$(container_data_mount)"
+    game_port="$(container_game_port)"
+
+    local docker_args=(-d -p "${HOST_PORT}:${game_port}")
 
     local cleaned_ports="${EXTRA_PORTS//,/ }"
     local mapping
@@ -146,18 +189,32 @@ apply_container() {
     done
 
     docker_args+=(
-        -v "${DATA_DIR}:/data"
+        -v "${DATA_DIR}:${mount_path}"
         --name "$SERVER_NAME"
         -e TZ=Europe/Berlin
-        -e EULA=TRUE
         -e MEMORY="$MEMORY"
         -e TYPE="$TYPE"
         --restart always
     )
 
+    if ! is_proxy_type; then
+        docker_args+=(-e EULA=TRUE)
+    fi
+
     [[ -n "${INIT_MEMORY:-}" ]] && docker_args+=(-e "INIT_MEMORY=$INIT_MEMORY")
     [[ -n "${MAX_MEMORY:-}" ]] && docker_args+=(-e "MAX_MEMORY=$MAX_MEMORY")
-    [[ -n "${VERSION:-}" ]] && docker_args+=(-e "VERSION=$VERSION")
+    if is_proxy_type; then
+        case "${TYPE^^}" in
+            VELOCITY)
+                [[ -n "${VERSION:-}" && "${VERSION^^}" != "LATEST" ]] && docker_args+=(-e "VELOCITY_VERSION=$VERSION")
+                ;;
+            WATERFALL)
+                [[ -n "${VERSION:-}" && "${VERSION^^}" != "LATEST" ]] && docker_args+=(-e "WATERFALL_VERSION=$VERSION")
+                ;;
+        esac
+    else
+        [[ -n "${VERSION:-}" ]] && docker_args+=(-e "VERSION=$VERSION")
+    fi
     if [[ "${TYPE^^}" == "PAPER" && -n "${PAPER_CHANNEL:-}" ]]; then
         docker_args+=(-e "PAPER_CHANNEL=$PAPER_CHANNEL")
     fi
@@ -175,7 +232,7 @@ apply_container() {
         )
     fi
 
-    log "Starte Docker-Container ${SERVER_NAME}..."
+    log "Starte Docker-Container ${SERVER_NAME} mit ${DOCKER_IMAGE} (${TYPE^^}, ${HOST_PORT}:${game_port}, ${DATA_DIR}:${mount_path})..."
     docker run "${docker_args[@]}" "$DOCKER_IMAGE"
 
     if [[ "$DO_START_DOCKER" != "ja" ]]; then
