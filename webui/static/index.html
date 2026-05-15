@@ -31,10 +31,12 @@ Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
 Name: Anzeigename in der WebUI.
 Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruefungen erkennt.
-Datenverzeichnis: Host-Ordner, der als /data in den Minecraft-Container gemountet wird.
+Datenverzeichnis: Host-Ordner, der bei Minecraft-Servern als /data und bei Proxy-Servern als /server gemountet wird.
+Typ: normale Minecraft-Typen nutzen itzg/minecraft-server. BungeeCord, Waterfall und Velocity nutzen automatisch itzg/mc-proxy.
+Docker Image: bei leerem oder Standardwert setzt die WebUI das passende Image automatisch.
 
 Ports und RCON
-Minecraft Host-Port: Java-Port auf dem Host, intern 25565.
+Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft und Velocity nutzen intern 25565, BungeeCord/Waterfall intern 25577.
 Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
@@ -42,7 +44,7 @@ RCON Container-Port: kann meist 25575 bleiben.
 Version und RAM
 Memory: allgemeiner RAM-Wert fuer das Docker-Image.
 Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
-Bei Velocity/BungeeCord ist LATEST meist sinnvoller als Minecraft-Versionsnummern.
+Bei Velocity/BungeeCord/Waterfall ist LATEST meist sinnvoller als Minecraft-Versionsnummern.
 
 BlueMap
 BlueMap URL: optionaler interner Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/.
