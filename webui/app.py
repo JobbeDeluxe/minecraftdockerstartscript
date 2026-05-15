@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 import base64
+import io
 import json
 import os
 import re
+import shutil
 import shlex
 import socket
 import subprocess
 import tempfile
 import urllib.parse
 import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -245,12 +248,12 @@ def delete_installed_plugin(config, name):
         path.unlink()
 
 
-EDITABLE_EXTENSIONS = {".conf", ".cfg", ".json", ".properties", ".txt", ".toml", ".yml", ".yaml"}
+EDITABLE_EXTENSIONS = {".conf", ".cfg", ".json", ".properties", ".secret", ".txt", ".toml", ".yml", ".yaml"}
 
 
 def plugin_file_roots(config):
     data_dir = Path(config.get("data_dir", "")).resolve()
-    return [data_dir / "plugins", data_dir / "config"]
+    return [data_dir, data_dir / "plugins", data_dir / "config"]
 
 
 def safe_plugin_file(config, relative_path):
@@ -261,19 +264,22 @@ def safe_plugin_file(config, relative_path):
         raise ValueError("Nur typische Text-Konfigdateien koennen bearbeitet werden.")
     data_dir = Path(config.get("data_dir", "")).resolve()
     target = (data_dir / rel).resolve()
-    roots = [root.resolve() for root in plugin_file_roots(config)]
-    if not any(target == root or root in target.parents for root in roots):
-        raise ValueError("Plugin-Dateien duerfen nur unter plugins/ oder config/ liegen.")
+    plugin_root = (data_dir / "plugins").resolve()
+    config_root = (data_dir / "config").resolve()
+    if target.parent != data_dir and not any(root in target.parents for root in (plugin_root, config_root)):
+        raise ValueError("Plugin-Dateien duerfen nur direkt im Datenordner oder unter plugins/ oder config/ liegen.")
     return target
 
 
 def list_plugin_files(config):
     data_dir = Path(config.get("data_dir", "")).resolve()
     files = []
-    for root in plugin_file_roots(config):
+    roots = [(data_dir, False), (data_dir / "plugins", True), (data_dir / "config", True)]
+    for root, recursive in roots:
         if not root.exists():
             continue
-        for path in sorted(root.rglob("*")):
+        iterator = root.rglob("*") if recursive else root.glob("*")
+        for path in sorted(iterator):
             if not path.is_file() or path.suffix.lower() not in EDITABLE_EXTENSIONS:
                 continue
             stat = path.stat()
@@ -296,6 +302,82 @@ def write_plugin_file(config, relative_path, content):
     path = safe_plugin_file(config, relative_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(str(content).rstrip() + "\n", encoding="utf-8")
+
+
+def safe_data_path(config, relative_path=""):
+    data_dir = Path(config.get("data_dir", "")).resolve()
+    rel = Path(str(relative_path or "").replace("\\", "/"))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("Ungueltiger Dateipfad.")
+    target = (data_dir / rel).resolve()
+    if target != data_dir and data_dir not in target.parents:
+        raise ValueError("Pfad liegt ausserhalb des Datenordners.")
+    return data_dir, target
+
+
+def list_data_files(config, relative_path=""):
+    data_dir, target = safe_data_path(config, relative_path)
+    if not target.exists():
+        return {"cwd": target.relative_to(data_dir).as_posix() if target != data_dir else "", "entries": []}
+    if not target.is_dir():
+        raise ValueError("Pfad ist kein Ordner.")
+    entries = []
+    for path in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append({
+            "name": path.name,
+            "path": path.resolve().relative_to(data_dir).as_posix(),
+            "type": "dir" if path.is_dir() else "file",
+            "size": stat.st_size,
+        })
+    return {"cwd": target.relative_to(data_dir).as_posix() if target != data_dir else "", "entries": entries[:500]}
+
+
+def delete_data_entry(config, relative_path):
+    data_dir, target = safe_data_path(config, relative_path)
+    if target == data_dir:
+        raise ValueError("Der Datenordner selbst kann nicht geloescht werden.")
+    if target.is_dir():
+        shutil.rmtree(target)
+    elif target.exists():
+        target.unlink()
+
+
+def rename_data_entry(config, relative_path, new_name):
+    data_dir, target = safe_data_path(config, relative_path)
+    if target == data_dir:
+        raise ValueError("Der Datenordner selbst kann nicht umbenannt werden.")
+    if "/" in new_name or "\\" in new_name or new_name in {"", ".", ".."}:
+        raise ValueError("Ungueltiger neuer Name.")
+    dest = (target.parent / new_name).resolve()
+    if data_dir not in dest.parents:
+        raise ValueError("Ziel liegt ausserhalb des Datenordners.")
+    target.rename(dest)
+    return dest.relative_to(data_dir).as_posix()
+
+
+def make_data_dir(config, relative_path):
+    _, target = safe_data_path(config, relative_path)
+    target.mkdir(parents=True, exist_ok=True)
+
+
+def extract_zip_upload(config, target_dir, name, content_b64):
+    if not name.lower().endswith(".zip"):
+        raise ValueError("Bitte einen .zip Ordner hochladen.")
+    data_dir, target = safe_data_path(config, target_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    payload = base64.b64decode(content_b64)
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        for member in archive.infolist():
+            if member.file_size > 1024 * 1024 * 1024:
+                raise ValueError("ZIP enthaelt eine zu grosse Datei.")
+            dest = (target / member.filename).resolve()
+            if dest != data_dir and data_dir not in dest.parents:
+                raise ValueError("ZIP enthaelt ungueltige Pfade.")
+        archive.extractall(target)
 
 
 def save_manual_plugin(config, name, content_b64):
@@ -476,6 +558,8 @@ def map_upstream_url(config, rest_path, query):
 
 def fetch_versions(server_type):
     server_type = (server_type or "PAPER").upper()
+    if server_type in {"VELOCITY", "BUNGEECORD"}:
+        return ["LATEST"]
     if server_type in {"PAPER", "FOLIA"}:
         try:
             import urllib.request
@@ -499,7 +583,7 @@ def fetch_versions(server_type):
             return ["LATEST"] + sorted(set(data.get("versions", [])), reverse=True)[:20]
         except Exception:
             return ["LATEST"]
-    return ["LATEST", "1.21.10", "1.21.9", "1.21.8", "1.21.7", "1.21.6", "1.21.5", "1.21.4"]
+    return ["LATEST"]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -571,6 +655,10 @@ class Handler(BaseHTTPRequestHandler):
                 query = urllib.parse.parse_qs(parsed.query)
                 rel_path = query.get("path", [""])[0]
                 self.send_json({"path": rel_path, "content": read_plugin_file(read_server(parts[2]), rel_path)})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "files":
+                query = urllib.parse.parse_qs(parsed.query)
+                rel_path = query.get("path", [""])[0]
+                self.send_json(list_data_files(read_server(parts[2]), rel_path))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "players":
                 self.send_json(parse_player_list(run_rcon_command(read_server(parts[2]), "list")))
             elif parts == ["api", "versions"]:
@@ -620,6 +708,24 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.read_json()
                 write_plugin_file(read_server(parts[2]), body.get("path", ""), body.get("content", ""))
                 self.send_json({"message": "Plugin-Konfig gespeichert. Plugin oder Server muss ggf. neu geladen werden."})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "files":
+                body = self.read_json()
+                config = read_server(parts[2])
+                op = body.get("op", "")
+                if op == "rename":
+                    new_path = rename_data_entry(config, body.get("path", ""), body.get("name", ""))
+                    self.send_json({"message": "Eintrag umbenannt.", "path": new_path})
+                elif op == "delete":
+                    delete_data_entry(config, body.get("path", ""))
+                    self.send_json({"message": "Eintrag geloescht."})
+                elif op == "mkdir":
+                    make_data_dir(config, body.get("path", ""))
+                    self.send_json({"message": "Ordner erstellt."})
+                elif op == "upload-zip":
+                    extract_zip_upload(config, body.get("target", ""), body.get("name", ""), body.get("content", ""))
+                    self.send_json({"message": "ZIP hochgeladen und entpackt."})
+                else:
+                    self.send_json({"error": "unsupported file operation"}, 400)
             elif parts == ["api", "backups", "import"]:
                 body = self.read_json()
                 source = Path(body.get("file", ""))
