@@ -23,20 +23,39 @@
 <div class="box"><h2>Plugin-Konfig <span id="pluginFileDirty" class="warnings"></span></h2><div class="actions"><select id="pluginFiles"></select><button id="refreshPluginFiles" type="button">Konfigs laden</button><button id="loadPluginFile" type="button">Datei laden</button><button id="savePluginFile" type="button">Datei speichern</button></div><textarea id="pluginFileContent" spellcheck="false" placeholder="Plugin-Konfig aus DATA_DIR/plugins oder DATA_DIR/config laden"></textarea></div>
 <div class="box"><h2>Dateien</h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Hoch</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="actions"><select id="fileEntries"></select><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div><pre id="fileList" class="small-output"></pre></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
-<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
+<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
+Speichern sichert nur das WebUI-Profil. Druecke danach Anwenden, damit Version, RAM, Ports, Docker-Image, RCON und Volumes wirklich im Docker-Container aktiv werden.
+Start startet einen vorhandenen Container. Wenn noch keiner existiert, erstellt Start ihn automatisch wie Anwenden. Restart startet nur den bestehenden Container neu.
+
+Profilfelder
+ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
 Name: Anzeigename in der WebUI.
 Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruefungen erkennt.
+Datenverzeichnis: Host-Ordner, der als /data in den Minecraft-Container gemountet wird.
+
+Ports und RCON
 Minecraft Host-Port: Java-Port auf dem Host, intern 25565.
 Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
-BlueMap URL: optionaler interner Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/. Leer lassen nutzt lokal 127.0.0.1:8100 oder den Host-Port aus Extra Ports wie 8123:8100/tcp. Hier gehoert keine oeffentliche Proxy-URL rein, sondern die Adresse, die der WebUI-Host erreichen kann.
-BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch auch hinter einem Reverse Proxy zur WebUI.
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
+
+Version und RAM
+Memory: allgemeiner RAM-Wert fuer das Docker-Image.
 Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
-Version/RAM/Ports/Image: Speichern aendert nur das WebUI-Profil. Erst Anwenden erstellt den Docker-Container mit diesen neuen Werten neu. Restart startet nur den bestehenden Container neu.
-Backups: liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
-Plugins.txt:
-  # deaktiviert eine Zeile
+Bei Velocity/BungeeCord ist LATEST meist sinnvoller als Minecraft-Versionsnummern.
+
+BlueMap
+BlueMap URL: optionaler interner Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/.
+Leer lassen nutzt lokal 127.0.0.1:8100 oder den Host-Port aus Extra Ports wie 8123:8100/tcp.
+BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch auch hinter einem Reverse Proxy zur WebUI.
+
+Backups und Dateien
+Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
+Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
+
+Plugins
+Eine Zeile in plugins.txt besteht aus Name und Quelle. # deaktiviert eine Zeile.
+Beispiele:
   BlueMap modrinth:bluemap
   Geyser modrinth:geyser
   Floodgate https://github.com/GeyserMC/Floodgate
@@ -47,11 +66,10 @@ Plugins.txt:
   CoreProtect https://github.com/PlayPro/CoreProtect:master
   CoreProtect build:master
 
-CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein git, aber curl/wget und entweder mvn oder Docker fuer den Maven-Container.
-SpigotMC-/BukkitDev-Webseiten sind meistens keine direkten JAR-Downloads. Wenn so eine Seite HTML statt JAR liefert, wird das Update jetzt als Fehler markiert.
-Manuelle Plugins werden in DATA_DIR/plugins/manuell gespeichert und beim Containerstart vom Minecraft-Server geladen.
-Plugin-Konfig kann Textdateien direkt im Datenordner sowie unter plugins/ und config/ bearbeiten, z. B. velocity.toml oder forwarding.secret.
-Dateien: Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.</pre><button id="closeHelp">Schliessen</button></div></dialog>
+Plugin-Konfig
+Der Editor kann Textdateien direkt im Datenordner sowie unter plugins/ und config/ bearbeiten, z. B. velocity.toml oder forwarding.secret.
+Manuelle Plugins werden in DATA_DIR/plugins/manuell gespeichert und beim Containerstart geladen.
+CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein git, aber curl/wget und entweder mvn oder Docker fuer den Maven-Container.</pre><button id="closeHelp">Schliessen</button></div></dialog>
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
