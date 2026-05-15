@@ -4,7 +4,7 @@ Eine hostbasierte Weboberflaeche zum Erstellen, Starten, Ueberwachen und Pflegen
 
 Das Projekt ist aus einem interaktiven Startscript entstanden. Der CLI-Modus ist weiterhin enthalten, aber der Hauptfokus liegt jetzt auf der WebUI: mehrere Serverprofile, Docker-Steuerung, Backups, Logs, RCON, Plugin-Verwaltung, BlueMap-Proxy und einfache Datei-/Konfig-Editoren.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/dashboard.svg)
 
 ## Highlights
 
@@ -23,7 +23,7 @@ Das Projekt ist aus einem interaktiven Startscript entstanden. Der CLI-Modus ist
 - Datei-Manager zum Anlegen, Umbenennen, Loeschen und Entpacken von ZIPs im Server-Datenordner
 - BlueMap kann ueber die WebUI geproxied und eingebettet werden, damit spaeter ein Reverse Proxy auf die WebUI reicht
 
-![Plugin- und Dateiverwaltung](docs/screenshots/plugins-files.png)
+![Plugin- und Dateiverwaltung](docs/screenshots/plugins-files.svg)
 
 ## Schnellstart
 
@@ -69,7 +69,7 @@ Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
 
 ## Screenshots
 
-![Hilfe](docs/screenshots/help.png)
+![Hilfe](docs/screenshots/help.svg)
 
 ## Servertypen
 
