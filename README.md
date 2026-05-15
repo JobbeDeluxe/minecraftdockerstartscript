@@ -4,7 +4,7 @@ Eine hostbasierte Weboberflaeche zum Erstellen, Starten, Ueberwachen und Pflegen
 
 Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, aber der Hauptfokus ist jetzt eine vollwertige WebUI fuer mehrere Serverprofile, Docker-Steuerung, Logs, RCON, Backups, Plugin-Management, BlueMap, Spieleraktionen und Datei-/Konfig-Verwaltung.
 
-![Dashboard](docs/screenshots/dashboard.svg)
+![Dashboard](docs/screenshots/dashboard.png)
 
 ## Was die WebUI kann
 
@@ -35,7 +35,7 @@ Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, a
 - BlueMap oeffnen oder direkt in der WebUI einbetten
 - BlueMap-Proxy unter `/map/<server-id>/`, damit spaeter ein Reverse Proxy auf die WebUI reicht
 
-![Management](docs/screenshots/management.svg)
+![Management](docs/screenshots/management.png)
 
 ## Schnellstart
 
@@ -166,7 +166,7 @@ Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner
 
 ## Hilfe im WebUI
 
-![Hilfe](docs/screenshots/help.svg)
+![Hilfe](docs/screenshots/help.png)
 
 Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap und den Unterschied zwischen `Speichern` und `Anwenden`.
 
