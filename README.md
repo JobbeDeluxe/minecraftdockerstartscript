@@ -2,28 +2,40 @@
 
 Eine hostbasierte Weboberflaeche zum Erstellen, Starten, Ueberwachen und Pflegen von Minecraft-Docker-Servern.
 
-Das Projekt ist aus einem interaktiven Startscript entstanden. Der CLI-Modus ist weiterhin enthalten, aber der Hauptfokus liegt jetzt auf der WebUI: mehrere Serverprofile, Docker-Steuerung, Backups, Logs, RCON, Plugin-Verwaltung, BlueMap-Proxy und einfache Datei-/Konfig-Editoren.
+Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, aber der Hauptfokus ist jetzt eine vollwertige WebUI fuer mehrere Serverprofile, Docker-Steuerung, Logs, RCON, Backups, Plugin-Management, BlueMap, Spieleraktionen und Datei-/Konfig-Verwaltung.
 
 ![Dashboard](docs/screenshots/dashboard.svg)
 
-## Highlights
+## Was die WebUI kann
 
-- Mehrere Minecraft-Serverprofile mit eigenem Container, Datenordner, Ports, RAM und Version
-- Docker-Aktionen direkt aus der WebUI: Anwenden, Start, Stop, Restart und Backup
-- Unterstuetzung fuer `itzg/minecraft-server` Typen wie Paper, Folia, Purpur, Fabric, Forge und viele weitere
-- Proxy-Unterstuetzung fuer Velocity, BungeeCord und Waterfall ueber `itzg/mc-proxy`
+- Mehrere Serverprofile mit eigener ID, eigenem Namen, Container, Datenordner, RAM, Minecraft-Version und Ports
+- Minecraft-Server ueber `itzg/minecraft-server`: Paper, Folia, Purpur, Vanilla, Fabric, Forge, Quilt und weitere Image-Typen
+- Proxy-Server ueber `itzg/mc-proxy`: Velocity, BungeeCord und Waterfall
+- Docker-Aktionen: Anwenden, Start, Stop, Restart und Backup
+- Start erstellt bei neuen Profilen automatisch einen fehlenden Container
 - Portpruefung gegen andere Profile und laufende Docker-Container
-- Live-Logs, Logfenster und RCON-Konsole
-- Spieleruebersicht per RCON `list` sowie Schnellbefehle fuer TP, Give, Kick, Ban und Pardon
-- Zentrale Backups mit Restore und Import als neues Serverprofil
-- `plugins.txt` Editor mit Plugin-Updates aus Modrinth, GitHub Releases, Spigot/Fallbacks und direkten Links
+- EULA, RAM, Version, Paper-Channel, RCON, Extra-Ports und Backup-Pfad direkt im Browser setzen
+- Versionsfeld mit manueller Eingabe plus Versionsliste/Refresh
+- Live-Logs und normales Logfenster
+- RCON-Konsole mit direktem Feedback und letzten Logzeilen
+- Spielerstatus links in der Serverliste und Spieleruebersicht per RCON `list`
+- RCON-Schnellaktionen fuer Teleport, Give, Kick, Ban und Pardon
+- `server.properties` Editor
+- `plugins.txt` Editor mit ungespeichert-Hinweis, Reload, Test-/Update-Workflow und Restart-Hinweis
+- Plugin-Updates aus Modrinth, GitHub Releases, Geyser-Endpunkten, Spigot/Fallbacks und direkten JAR-Links
 - CoreProtect-Source-Build ohne lokales `git`, mit Maven lokal oder per Docker-Container
-- Manuelle Plugin-Uploads, installierte Plugins anzeigen und loeschen
-- Editor fuer `server.properties`, Plugin-Konfigurationen, `velocity.toml`, `forwarding.secret` und weitere Textdateien
-- Datei-Manager zum Anlegen, Umbenennen, Loeschen und Entpacken von ZIPs im Server-Datenordner
-- BlueMap kann ueber die WebUI geproxied und eingebettet werden, damit spaeter ein Reverse Proxy auf die WebUI reicht
+- Manuelle Plugin-JARs hochladen und loeschen
+- Installierte Plugins anzeigen und aus dem Plugin-Ordner entfernen
+- Plugin-Konfigdateien direkt bearbeiten, zum Beispiel unter `plugins/`, `config/` oder im Datenordner
+- Velocity-Dateien wie `velocity.toml` und `forwarding.secret` editieren
+- Datei-Manager fuer Serverdaten: Ordner laden, hoch navigieren, Ordner erstellen, umbenennen und loeschen
+- ZIP-Upload zum Importieren oder Austauschen von Welten und Daten
+- Zentrale Backups mit Restore in ein bestehendes Profil
+- Import aus `.tar.gz`/`.tgz` Backups als neues Serverprofil
+- BlueMap oeffnen oder direkt in der WebUI einbetten
+- BlueMap-Proxy unter `/map/<server-id>/`, damit spaeter ein Reverse Proxy auf die WebUI reicht
 
-![Plugin- und Dateiverwaltung](docs/screenshots/plugins-files.svg)
+![Management](docs/screenshots/management.svg)
 
 ## Schnellstart
 
@@ -55,11 +67,11 @@ Fuer einen LAN-Test:
 MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 ```
 
-Wichtig: `Speichern` sichert nur das WebUI-Profil. Druecke danach `Anwenden`, damit Version, RAM, Ports, Docker-Image, RCON und Volumes wirklich im Docker-Container aktiv werden.
+Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktualisiert den Docker-Container, damit Version, RAM, Ports, Docker-Image, RCON und Volumes wirklich aktiv werden.
 
 ## WebUI-Version
 
-Die aktuelle WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
+Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
 v1.0.0-rc1
@@ -67,11 +79,7 @@ v1.0.0-rc1
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
 
-## Screenshots
-
-![Hilfe](docs/screenshots/help.svg)
-
-## Servertypen
+## Server und Docker
 
 Normale Minecraft-Server laufen ueber `itzg/minecraft-server`. Dazu gehoeren unter anderem:
 
@@ -86,7 +94,42 @@ Proxy-Server laufen ueber `itzg/mc-proxy`:
 VELOCITY, BUNGEECORD, WATERFALL
 ```
 
-Die WebUI setzt bei Proxy-Typen automatisch das passende Docker-Image, mountet den Datenordner nach `/server` und nutzt die passenden internen Ports.
+Bei Proxy-Typen setzt die WebUI automatisch das passende Image, mountet den Datenordner nach `/server` und nutzt die passenden internen Ports. Fuer Velocity koennen `velocity.toml`, `forwarding.secret` und weitere Textdateien ueber den Datei-/Konfig-Editor bearbeitet werden.
+
+## Spieler und RCON
+
+RCON kann pro Server aktiviert werden. Wichtig sind ein eigenes Passwort und ein eigener Host-Port pro Server, zum Beispiel `25575`, `25576`, `25577`.
+
+Die WebUI nutzt RCON fuer:
+
+- Spieleranzahl und Spielerliste
+- Freie Konsolenbefehle
+- Letzte Logausgabe nach einem Befehl
+- Schnellaktionen wie `tp`, `give`, `kick`, `ban` und `pardon`
+
+Die Serverliste zeigt neben Status und Port auch die Spielerzahl an, sofern der Server per RCON antwortet.
+
+## BlueMap
+
+BlueMap kann als Plugin installiert werden, zum Beispiel:
+
+```text
+BlueMap modrinth:bluemap
+```
+
+Der BlueMap-Port muss im Serverprofil als Extra-Port gemappt werden, zum Beispiel:
+
+```text
+8100:8100/tcp
+```
+
+Die WebUI kann BlueMap dann oeffnen oder als Frame einbetten. Wenn `BlueMap URL` leer bleibt, nutzt die WebUI den Standardpfad:
+
+```text
+/map/<server-id>/
+```
+
+Damit kann spaeter ein Reverse Proxy nur auf die WebUI zeigen. Der Browser muss den internen BlueMap-Port dann nicht direkt erreichen.
 
 ## Plugins
 
@@ -96,7 +139,7 @@ Beispiele:
 
 ```text
 BlueMap modrinth:bluemap
-Geyser modrinth:geyser
+Geyser-Spigot modrinth:geyser
 Floodgate https://github.com/GeyserMC/Floodgate
 WorldEdit modrinth:worldedit
 DiscordSRV modrinth:discordsrv
@@ -104,29 +147,28 @@ CoreProtect https://github.com/PlayPro/CoreProtect
 CoreProtect build:master
 ```
 
-Zeilen mit `#` am Anfang sind deaktiviert. Nach Plugin-Updates fragt die WebUI nach einem Restart, damit der Server die neuen JARs laedt.
+Zeilen mit `#` am Anfang sind deaktiviert. Nach Plugin-Updates fragt die WebUI nach einem Restart, damit der Server die neuen JARs laedt. Manuelle Plugins landen unter `DATA_DIR/plugins/manuell`; installierte Plugins aus `DATA_DIR/plugins` koennen angezeigt und entfernt werden.
+
+## Dateien und Konfiguration
+
+Die WebUI enthaelt zwei Ebenen fuer Dateien:
+
+- Konfig-Editor fuer Textdateien wie `server.properties`, Plugin-Konfigs, `velocity.toml` und `forwarding.secret`
+- Datei-Manager fuer Ordner, Welten, Uploads, Umbenennen, Loeschen und ZIP-Import
+
+Der ZIP-Upload ist fuer Welt-Importe oder Datenaustausch gedacht. Entpackt wird in den aktuell ausgewaehlten Ordner innerhalb des Server-Datenverzeichnisses.
 
 ## Backups und Import
 
-Backups werden zentral abgelegt und enthalten den Containernamen im Dateinamen. Dadurch kann ein alter Server geloescht und bei Bedarf spaeter wieder als neues Profil importiert werden.
+Backups werden zentral abgelegt und enthalten den Server-/Containernamen im Dateinamen. Dadurch kann ein alter Server geloescht und spaeter wieder als neues Profil importiert werden.
 
-Der Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner und gibt Statusmeldungen im Ergebnisfenster aus.
+Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner und gibt Statusmeldungen im Ergebnisfenster aus. Import erstellt ein neues Profil und stellt das ausgewaehlte Backup dort wieder her.
 
-## BlueMap und Reverse Proxy
+## Hilfe im WebUI
 
-Wenn BlueMap als Plugin installiert ist, kann der BlueMap-Port in `Extra Ports` gemappt werden, zum Beispiel:
+![Hilfe](docs/screenshots/help.svg)
 
-```text
-8100:8100/tcp
-```
-
-Die WebUI stellt BlueMap dann unter diesem Pfad bereit:
-
-```text
-/map/<server-id>/
-```
-
-Damit muss der Browser spaeter nicht direkt den BlueMap-Port erreichen. Ein Reverse Proxy auf die WebUI reicht.
+Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap und den Unterschied zwischen `Speichern` und `Anwenden`.
 
 ## CLI-Modus
 
@@ -149,6 +191,7 @@ Empfehlung fuer produktive Nutzung:
 - RCON-Passwoerter pro Server eindeutig setzen
 - Ports pro Server bewusst trennen
 - Vor groesseren Aenderungen Backup erstellen
+- Datei- und ZIP-Uploads nur vertrauenswuerdigen Admins erlauben
 
 ## Status
 
