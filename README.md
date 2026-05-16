@@ -4,7 +4,7 @@ Eine hostbasierte Weboberflaeche zum Erstellen, Starten, Ueberwachen und Pflegen
 
 Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, aber der Hauptfokus ist jetzt eine vollwertige WebUI fuer mehrere Serverprofile, Docker-Steuerung, Logs, RCON, Backups, Plugin-Management, BlueMap, Spieleraktionen und Datei-/Konfig-Verwaltung.
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/dashboard.svg)
 
 ## Was die WebUI kann
 
@@ -35,7 +35,7 @@ Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, a
 - BlueMap oeffnen oder direkt in der WebUI einbetten
 - BlueMap-Proxy unter `/map/<server-id>/`, damit spaeter ein Reverse Proxy auf die WebUI reicht
 
-![Management](docs/screenshots/management.png)
+![Management](docs/screenshots/management.svg)
 
 ## Schnellstart
 
@@ -140,12 +140,15 @@ Beispiele:
 ```text
 BlueMap modrinth:bluemap
 Geyser-Spigot modrinth:geyser
+Geyser-Velocity https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/velocity
 Floodgate https://github.com/GeyserMC/Floodgate
 WorldEdit modrinth:worldedit
 DiscordSRV modrinth:discordsrv
 CoreProtect https://github.com/PlayPro/CoreProtect
 CoreProtect build:master
 ```
+
+Bei `modrinth:<slug>` waehlt die WebUI den Loader passend zum Server-Typ. Ein Velocity-Profil bevorzugt also `velocity`, Paper/Purpur/Folia bevorzugen passende Bukkit-Loader. Wenn Modrinth fuer den gewaehlten Server-Typ keine passende JAR anbietet, bricht das Plugin mit einer klaren Meldung ab, statt still eine falsche Fabric/NeoForge/Bukkit-Datei zu installieren.
 
 Zeilen mit `#` am Anfang sind deaktiviert. Nach Plugin-Updates fragt die WebUI nach einem Restart, damit der Server die neuen JARs laedt. Manuelle Plugins landen unter `DATA_DIR/plugins/manuell`; installierte Plugins aus `DATA_DIR/plugins` koennen angezeigt und entfernt werden.
 
@@ -166,7 +169,7 @@ Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner
 
 ## Hilfe im WebUI
 
-![Hilfe](docs/screenshots/help.png)
+![Hilfe](docs/screenshots/help.svg)
 
 Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap und den Unterschied zwischen `Speichern` und `Anwenden`.
 

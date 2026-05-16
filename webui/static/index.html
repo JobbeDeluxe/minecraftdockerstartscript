@@ -57,9 +57,11 @@ Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in de
 
 Plugins
 Eine Zeile in plugins.txt besteht aus Name und Quelle. # deaktiviert eine Zeile.
+Bei modrinth:<slug> waehlt die WebUI passend zum Server-Typ den Loader, z. B. velocity fuer Velocity und paper/spigot/bukkit fuer Paper. Wenn kein passender Loader gefunden wird, gibt es eine Fehlermeldung statt einer falschen JAR.
 Beispiele:
   BlueMap modrinth:bluemap
   Geyser modrinth:geyser
+  Geyser-Velocity https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/velocity
   Floodgate https://github.com/GeyserMC/Floodgate
   WorldEdit modrinth:worldedit
   DiscordSRV modrinth:discordsrv

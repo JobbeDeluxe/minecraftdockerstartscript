@@ -302,31 +302,100 @@ PY
 modrinth_latest_jar_url() {
     local slug="${1#modrinth:}"
     local channels="${2:-release,beta,alpha}"
+    local server_type="${3:-${TYPE:-PAPER}}"
+    local mc_version="${4:-${VERSION:-LATEST}}"
     need_cmd python3
-    python3 - "$slug" "$channels" <<'PY'
+    python3 - "$slug" "$channels" "$server_type" "$mc_version" <<'PY'
 import json, sys, urllib.parse, urllib.request
 slug = sys.argv[1]
 channels = [c.strip() for c in sys.argv[2].split(",") if c.strip()]
-preferred_loaders = {"paper", "spigot", "bukkit", "purpur"}
+server_type = sys.argv[3].strip().upper()
+mc_version = sys.argv[4].strip()
+
+loader_map = {
+    "PAPER": ["paper", "spigot", "bukkit"],
+    "FOLIA": ["folia", "paper", "spigot", "bukkit"],
+    "PURPUR": ["purpur", "paper", "spigot", "bukkit"],
+    "SPIGOT": ["spigot", "bukkit"],
+    "BUKKIT": ["bukkit"],
+    "VELOCITY": ["velocity"],
+    "BUNGEECORD": ["bungeecord", "waterfall"],
+    "WATERFALL": ["waterfall", "bungeecord"],
+    "FABRIC": ["fabric"],
+    "QUILT": ["quilt", "fabric"],
+    "FORGE": ["forge"],
+    "NEOFORGE": ["neoforge"],
+}
+preferred_loaders = loader_map.get(server_type, [server_type.lower()])
+allow_loader_fallback = server_type in {"PAPER", "FOLIA", "PURPUR", "SPIGOT", "BUKKIT"}
 url = "https://api.modrinth.com/v2/project/%s/version" % urllib.parse.quote(slug)
 req = urllib.request.Request(url, headers={"User-Agent": "minecraftdocker-webui"})
 with urllib.request.urlopen(req, timeout=20) as resp:
     versions = json.load(resp)
+
+def jar_files(version):
+    return [
+        file for file in version.get("files", [])
+        if file.get("filename", "").lower().endswith(".jar")
+        and "sources" not in file.get("filename", "").lower()
+        and "javadoc" not in file.get("filename", "").lower()
+    ]
+
+def choose_file(version):
+    primary = version.get("files", [])
+    for file in primary:
+        if file.get("primary") and file in jar_files(version):
+            return file
+    files = jar_files(version)
+    return files[0] if files else None
+
+def version_matches_mc(version):
+    if not mc_version or mc_version.upper() == "LATEST":
+        return True
+    return mc_version in set(version.get("game_versions") or [])
+
 for channel in channels:
     channel_versions = [v for v in versions if v.get("version_type") == channel]
-    for version in channel_versions:
-        loaders = set(version.get("loaders") or [])
-        if not loaders.intersection(preferred_loaders):
-            continue
-        for file in version.get("files", []):
-            if file.get("filename", "").lower().endswith(".jar"):
+    if not channel_versions:
+        continue
+
+    mc_versions = [v for v in channel_versions if version_matches_mc(v)]
+    search_sets = [("mit passender Minecraft-Version", mc_versions)]
+    if mc_version and mc_version.upper() != "LATEST" and not mc_versions:
+        print(
+            f"Warnung: Modrinth {slug}: keine {channel}-Version fuer Minecraft {mc_version}; pruefe neueste passende Loader-Version.",
+            file=sys.stderr,
+        )
+    if mc_version and mc_version.upper() != "LATEST":
+        search_sets.append(("ohne Minecraft-Versionsfilter", channel_versions))
+
+    for scope_label, candidates in search_sets:
+        for loader in preferred_loaders:
+            for version in candidates:
+                loaders = set(version.get("loaders") or [])
+                if loader not in loaders:
+                    continue
+                file = choose_file(version)
+                if file:
+                    print(
+                        f"Modrinth {slug}: waehle {version.get('version_number')} fuer Loader {loader} ({scope_label}): {file.get('filename')}",
+                        file=sys.stderr,
+                    )
+                    print(file["url"])
+                    raise SystemExit
+
+    if allow_loader_fallback:
+        for version in channel_versions:
+            file = choose_file(version)
+            if file:
+                print(
+                    f"Warnung: Modrinth {slug}: kein bevorzugter Loader {preferred_loaders} gefunden; nutze Fallback {version.get('loaders')} {file.get('filename')}.",
+                    file=sys.stderr,
+                )
                 print(file["url"])
                 raise SystemExit
-    for version in channel_versions:
-        for file in version.get("files", []):
-            if file.get("filename", "").lower().endswith(".jar"):
-                print(file["url"])
-                raise SystemExit
+
+print(f"Fehler: Modrinth {slug}: keine JAR fuer Server-Typ {server_type} mit Loader {preferred_loaders} gefunden.", file=sys.stderr)
 raise SystemExit(1)
 PY
 }
@@ -376,7 +445,7 @@ download_griefprevention_latest() {
     local url
     url="$(modrinth_latest_jar_url "griefprevention" || true)"
     if [[ -n "${url:-}" ]] && download_plugin_jar "$url" "$target"; then
-        log "GriefPrevention: Fallback ueber Modrinth erfolgreich."
+        log "GriefPrevention: Fallback ueber Mo`òinth erfolgreich."
         return 0
     fi
     url="$(github_latest_jar_url "TechFortress/GriefPrevention" || true)"
@@ -441,10 +510,10 @@ update_plugins() {
             slug="${spec%@*}"
             channels="${spec#*@}"
             [[ "$channels" == "$slug" ]] && channels=""
-            url="$(modrinth_latest_jar_url "$slug" "$channels" || true)"
+            url="$(modrinth_latest_jar_url "$slug" "$channels" "$TYPE" "$VERSION" || true)"
         elif [[ "$source" == *"modrinth.com/plugin/"* || "$source" == *"modrinth.com/project/"* || "$source" == *"modrinth.com/mod/"* ]]; then
             if slug="$(extract_modrinth_slug "$source")"; then
-                url="$(modrinth_latest_jar_url "$slug" || true)"
+                url="$(modrinth_latest_jar_url "$slug" "" "$TYPE" "$VERSION" || true)"
             fi
         elif [[ "$source" == *"spigotmc.org/resources/"* ]]; then
             if rid="$(extract_spigot_resource_id "$source")"; then
@@ -453,7 +522,7 @@ update_plugins() {
         elif [[ "$source" == *"dev.bukkit.org"* ]]; then
             if fallback_slug="$(bukkit_modrinth_slug_fallback "$name")"; then
                 log "Plugin ${name}: DevBukkit blockiert oft Direktdownloads, versuche Modrinth-Fallback (${fallback_slug})."
-                url="$(modrinth_latest_jar_url "$fallback_slug" || true)"
+                url="$(modrinth_latest_jar_url "$fallback_slug" "" "$TYPE" "$VERSION" || true)"
             elif [[ "${name,,}" == "griefprevention" ]]; then
                 if download_griefprevention_latest "$target"; then
                     install_plugin_jar "$name" "$target"

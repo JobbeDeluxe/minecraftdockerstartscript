@@ -89,6 +89,7 @@ Beispiel:
 ```text
 BlueMap modrinth:bluemap
 Geyser modrinth:geyser
+Geyser-Velocity https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/velocity
 Floodgate https://github.com/GeyserMC/Floodgate
 WorldEdit modrinth:worldedit
 DiscordSRV modrinth:discordsrv
@@ -96,6 +97,8 @@ DiscordSRV https://download.discordsrv.com/v2/DiscordSRV/DiscordSRV/release/down
 CoreProtect https://github.com/PlayPro/CoreProtect
 CoreProtect build:master
 ```
+
+Bei `modrinth:<slug>` waehlt die WebUI den Loader passend zum Server-Typ. Velocity bevorzugt `velocity`, Bungee/Waterfall bevorzugen `bungeecord`/`waterfall`, Paper/Purpur/Folia bevorzugen Bukkit-kompatible Loader. Wenn kein passender Loader gefunden wird, wird das Plugin als Fehler gemeldet, statt eine falsche JAR zu installieren.
 
 Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem GitHub-Source-Zip gebaut; dafuer braucht der Host
 kein `git`, aber `curl`/`wget` und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
