@@ -24,6 +24,7 @@ RUN_DIR = STATE_DIR / "run"
 INIT_MARKER = STATE_DIR / ".initialized"
 SAFE_ID = re.compile(r"^[a-zA-Z0-9_.-]+$")
 PORT_RE = re.compile(r"^(\d+):(\d+)(?:/(tcp|udp))?$", re.I)
+MEMORY_RE = re.compile(r"^(\d+)\s*([kmg])(?:b)?$", re.I)
 
 DEFAULT_SERVER = {
     "id": "survival",
@@ -78,6 +79,14 @@ def read_server(server_id):
     return data
 
 
+def normalize_memory_value(value):
+    value = str(value or "").strip()
+    match = MEMORY_RE.match(value)
+    if match:
+        return f"{match.group(1)}{match.group(2).upper()}"
+    return value
+
+
 def write_server(data):
     server_id = str(data.get("id", "")).strip()
     if not server_id:
@@ -89,18 +98,58 @@ def write_server(data):
     merged["id"] = server_id
     merged["container_name"] = merged.get("container_name") or f"mc-{server_id}"
     merged["data_dir"] = merged.get("data_dir") or f"/opt/minecraft/{server_id}"
+    for key in ("memory", "init_memory", "max_memory"):
+        merged[key] = normalize_memory_value(merged.get(key, ""))
     warnings = port_warnings(merged)
     server_path(server_id).write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     merged["warnings"] = warnings
     return merged
 
 
+def remove_container(container_name):
+    name = str(container_name or "").strip()
+    if not name:
+        return ["Kein Containername im Profil gesetzt."]
+    result = run_command(["docker", "rm", "-f", name], timeout=60)
+    stdout = result.get("stdout", "").strip()
+    stderr = result.get("stderr", "").strip()
+    if result.get("ok"):
+        return [f"Container {name} geloescht."]
+    if result.get("code") == 127:
+        raise RuntimeError(f"Docker konnte nicht ausgefuehrt werden: {stderr}")
+    if "No such container" in stderr or "No such object" in stderr:
+        return [f"Container {name} war nicht vorhanden."]
+    raise RuntimeError(f"Container {name} konnte nicht geloescht werden: {stderr or stdout}")
+
+
+def delete_data_dir(config):
+    raw = str(config.get("data_dir") or "").strip()
+    if not raw:
+        return ["Kein Datenordner im Profil gesetzt."]
+    target = Path(raw).expanduser().resolve()
+    roots = [STATE_DIR.resolve(), ROOT.resolve()]
+    if target.parent == target or len(target.parts) < 3 or any(target == root or target in root.parents for root in roots):
+        raise ValueError(f"Datenordner wird aus Sicherheitsgruenden nicht geloescht: {target}")
+    if not target.exists():
+        return [f"Datenordner war nicht vorhanden: {target}"]
+    if not target.is_dir():
+        raise ValueError(f"Datenpfad ist kein Ordner: {target}")
+    shutil.rmtree(target)
+    return [f"Datenordner geloescht: {target}"]
+
+
 def delete_server(server_id):
     INIT_MARKER.parent.mkdir(parents=True, exist_ok=True)
     INIT_MARKER.write_text("ok\n", encoding="utf-8")
+    config = read_server(server_id)
+    details = []
+    details.extend(remove_container(config.get("container_name")))
+    details.extend(delete_data_dir(config))
     path = server_path(server_id)
     if path.exists():
         path.unlink()
+        details.append(f"Serverprofil {server_id} geloescht.")
+    return {"message": f"Server {server_id} geloescht.", "details": details}
 
 
 def list_servers():
@@ -757,8 +806,7 @@ class Handler(BaseHTTPRequestHandler):
         parts = [part for part in parsed.path.split("/") if part]
         try:
             if len(parts) == 3 and parts[:2] == ["api", "servers"]:
-                delete_server(parts[2])
-                self.send_json({"message": "Serverprofil geloescht."})
+                self.send_json(delete_server(parts[2]))
             elif len(parts) == 5 and parts[:2] == ["api", "servers"] and parts[3] == "manual-plugins":
                 delete_manual_plugin(read_server(parts[2]), urllib.parse.unquote(parts[4]))
                 self.send_json({"message": "Manuelles Plugin geloescht."})

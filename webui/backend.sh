@@ -70,6 +70,20 @@ RCON_COMMAND="${RCON_COMMAND:-}"
 BACKUP_ROOT="${BACKUP_ROOT:-${HOME}/minecraftdocker-backups}"
 BACKUP_FILE="${BACKUP_FILE:-}"
 
+normalize_memory_value() {
+    local value="${1:-}"
+    value="${value//[[:space:]]/}"
+    if [[ "$value" =~ ^([0-9]+)([kKmMgG])([bB])?$ ]]; then
+        printf "%s%s" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]^^}"
+    else
+        printf "%s" "$value"
+    fi
+}
+
+MEMORY="$(normalize_memory_value "$MEMORY")"
+INIT_MEMORY="$(normalize_memory_value "$INIT_MEMORY")"
+MAX_MEMORY="$(normalize_memory_value "$MAX_MEMORY")"
+
 mkdir -p "$DATA_DIR" "$PLUGIN_DIR" "$BACKUP_DIR"
 
 is_proxy_type() {
@@ -174,7 +188,7 @@ apply_container() {
 
     stop_server
     log "Entferne alten Docker-Container ${SERVER_NAME}..."
-    docker rm "$SERVER_NAME" >/dev/null 2>&1 || true
+    docker rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
 
     local mount_path game_port
     mount_path="$(container_data_mount)"
@@ -232,6 +246,7 @@ apply_container() {
         )
     fi
 
+    log "RAM-Konfiguration: MEMORY=${MEMORY:-<leer>}, INIT_MEMORY=${INIT_MEMORY:-<leer>}, MAX_MEMORY=${MAX_MEMORY:-<leer>}"
     log "Starte Docker-Container ${SERVER_NAME} mit ${DOCKER_IMAGE} (${TYPE^^}, ${HOST_PORT}:${game_port}, ${DATA_DIR}:${mount_path})..."
     docker run "${docker_args[@]}" "$DOCKER_IMAGE"
 

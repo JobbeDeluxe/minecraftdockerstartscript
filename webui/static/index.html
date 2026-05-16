@@ -42,7 +42,7 @@ RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
 
 Version und RAM
-Memory: allgemeiner RAM-Wert fuer das Docker-Image.
+Memory: allgemeiner RAM-Wert fuer das Docker-Image. Eingaben wie 1GB werden als 1G gespeichert.
 Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
 Bei Velocity/BungeeCord/Waterfall ist LATEST meist sinnvoller als Minecraft-Versionsnummern.
 
@@ -53,6 +53,7 @@ BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch 
 
 Backups und Dateien
 Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
+Server loeschen entfernt das Profil, den Docker-Container und den Datenordner.
 Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
 
 Plugins
