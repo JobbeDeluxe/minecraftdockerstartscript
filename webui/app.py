@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
+APP_VERSION = "v1.0.0-rc2"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -260,6 +261,19 @@ def port_warnings(config):
     if not config.get("eula_accepted"):
         warnings.append("eula: Die Minecraft EULA ist noch nicht akzeptiert; Anwenden wird blockiert.")
     return warnings
+
+
+def blocking_action_warnings(config):
+    blockers = []
+    for warning in port_warnings(config):
+        if (
+            warning.startswith("eula:")
+            or "doppelt" in warning
+            or "scheint auf dem Host bereits offen" in warning
+            or "wird bereits von Docker-Container" in warning
+        ):
+            blockers.append(warning)
+    return blockers
 
 
 def plugins_path(config):
@@ -546,7 +560,7 @@ def write_temp_env(config):
 
 def run_backend_action(config, action):
     if action in {"apply", "start", "restart"}:
-        blockers = [w for w in port_warnings(config) if w.startswith("eula:") or "kollidiert" in w or "doppelt" in w]
+        blockers = blocking_action_warnings(config)
         if blockers:
             return {"ok": False, "code": 2, "stdout": "", "stderr": "\n".join(blockers)}
     env_file = write_temp_env(config)
@@ -640,6 +654,7 @@ class Handler(BaseHTTPRequestHandler):
         body = path.read_bytes()
         self.send_response(200)
         self.send_header("content-type", content_type)
+        self.send_header("cache-control", "no-store, max-age=0")
         self.send_header("content-length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -676,6 +691,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_file(STATIC_DIR / "style.css", "text/css; charset=utf-8")
             elif parsed.path == "/static/app.js":
                 self.send_file(STATIC_DIR / "app.js", "text/javascript; charset=utf-8")
+            elif parts == ["api", "version"]:
+                self.send_json({"version": APP_VERSION})
             elif parts == ["api", "servers"]:
                 payload = []
                 for server in list_servers():
