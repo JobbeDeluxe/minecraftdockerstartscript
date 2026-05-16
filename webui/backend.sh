@@ -445,7 +445,7 @@ download_griefprevention_latest() {
     local url
     url="$(modrinth_latest_jar_url "griefprevention" || true)"
     if [[ -n "${url:-}" ]] && download_plugin_jar "$url" "$target"; then
-        log "GriefPrevention: Fallback ueber Mo`òinth erfolgreich."
+        log "GriefPrevention: Fallback ueber Modrinth erfolgreich."
         return 0
     fi
     url="$(github_latest_jar_url "TechFortress/GriefPrevention" || true)"
