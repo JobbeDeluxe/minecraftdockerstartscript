@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.0-rc2"
+APP_VERSION = "v1.0.1"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -45,6 +45,7 @@ DEFAULT_SERVER = {
     "eula_accepted": False,
     "backup_before_apply": False,
     "start_after_apply": True,
+    "disabled": False,
     "rcon_enabled": True,
     "rcon_password": "",
     "rcon_host_port": "25575",
@@ -80,6 +81,13 @@ def read_server(server_id):
     return data
 
 
+def is_disabled(config):
+    value = config.get("disabled", False)
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "ja", "on"}
+    return bool(value)
+
+
 def normalize_memory_value(value):
     value = str(value or "").strip()
     match = MEMORY_RE.match(value)
@@ -94,17 +102,32 @@ def write_server(data):
         server_id = re.sub(r"[^a-z0-9_.-]+", "-", str(data.get("name", "server")).lower()).strip("-") or "server"
     if not SAFE_ID.match(server_id):
         raise ValueError("server id may only contain letters, numbers, dot, underscore and dash")
+    existing = {}
+    path = server_path(server_id)
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = {}
     merged = DEFAULT_SERVER.copy()
+    merged.update(existing)
     merged.update(data)
     merged["id"] = server_id
     merged["container_name"] = merged.get("container_name") or f"mc-{server_id}"
     merged["data_dir"] = merged.get("data_dir") or f"/opt/minecraft/{server_id}"
     for key in ("memory", "init_memory", "max_memory"):
         merged[key] = normalize_memory_value(merged.get(key, ""))
+    merged["disabled"] = is_disabled(merged)
     warnings = port_warnings(merged)
     server_path(server_id).write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     merged["warnings"] = warnings
     return merged
+
+
+def set_server_disabled(server_id, disabled):
+    config = read_server(server_id)
+    config["disabled"] = bool(disabled)
+    return write_server(config)
 
 
 def remove_container(container_name):
@@ -177,6 +200,8 @@ def run_command(args, timeout=60):
 
 
 def docker_status(config):
+    if is_disabled(config):
+        return {"state": "deaktiviert", "running": False, "disabled": True}
     result = run_command(["docker", "container", "inspect", config.get("container_name", ""), "--format", "{{json .State}}"], timeout=15)
     if not result["ok"]:
         return {"state": "missing", "running": False}
@@ -234,6 +259,8 @@ def port_warnings(config):
     for server in list_servers():
         if server.get("id") == config.get("id"):
             continue
+        if is_disabled(server):
+            continue
         for label, port, proto in parse_ports(server):
             profile_ports.setdefault((port, proto), []).append(f"{server.get('name') or server.get('id')}:{label}")
     current = parse_ports(config)
@@ -269,6 +296,7 @@ def blocking_action_warnings(config):
         if (
             warning.startswith("eula:")
             or "doppelt" in warning
+            or "kollidiert mit Profil" in warning
             or "scheint auf dem Host bereits offen" in warning
             or "wird bereits von Docker-Container" in warning
         ):
@@ -757,7 +785,15 @@ class Handler(BaseHTTPRequestHandler):
                 if action not in {"apply", "start", "stop", "restart", "disable", "backup", "plugins"}:
                     self.send_json({"error": "unsupported action"}, 400)
                     return
-                self.send_json(run_backend_action(read_server(parts[2]), action))
+                config = read_server(parts[2])
+                result = run_backend_action(config, action)
+                if result.get("ok"):
+                    if action == "disable":
+                        set_server_disabled(parts[2], True)
+                        result["stdout"] = (result.get("stdout", "").rstrip() + "\nProfil wurde deaktiviert. Daten bleiben erhalten.").lstrip()
+                    elif action in {"apply", "start", "restart"}:
+                        set_server_disabled(parts[2], False)
+                self.send_json(result)
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "rcon":
                 body = self.read_json()
                 self.send_json(run_rcon_command(read_server(parts[2]), body.get("command", "")))

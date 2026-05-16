@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.0-rc2</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.1</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -26,7 +26,7 @@
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
 Stop haelt nur den Container an; geaenderte Docker-Einstellungen werden beim naechsten Start/Restart erkannt.
-Deaktivieren entfernt nur den Docker-Container. Profil und Daten bleiben erhalten, der Host-Port wird frei.
+Deaktivieren entfernt nur den Docker-Container und markiert das Profil als deaktiviert. Profil und Daten bleiben erhalten, der Host-Port wird frei.
 
 Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
@@ -54,7 +54,7 @@ BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch 
 
 Backups und Dateien
 Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
-Deaktivieren entfernt nur den Container. Server loeschen entfernt das Profil, den Docker-Container und den Datenordner.
+Deaktivieren entfernt nur den Container und markiert das Profil als deaktiviert. Server loeschen entfernt das Profil, den Docker-Container und den Datenordner.
 Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
 
 Plugins
@@ -79,6 +79,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.0-rc2"></script>
+<script src="/static/app.js?v=1.0.1"></script>
 </body>
 </html>

@@ -11,6 +11,8 @@ aside{border-right:1px solid var(--line);padding:14px;background:#14191f}
 .content{padding:16px}
 .server{width:100%;display:grid;gap:3px;text-align:left;padding:10px;border:1px solid var(--line);border-radius:8px;color:var(--text);background:var(--panel);margin-bottom:8px;cursor:pointer}
 .server.active{border-color:var(--accent)}
+.server.disabled{opacity:.58;background:#15191f;border-color:#27303a}
+.server.disabled strong,.server.disabled .muted,.server.disabled .status{color:#7f8994}
 .muted{color:var(--muted)}
 .status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:99px;background:var(--bad)}
