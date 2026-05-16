@@ -139,9 +139,17 @@ need_docker() {
     need_cmd docker
 }
 
+container_exists() {
+    docker container inspect "$SERVER_NAME" >/dev/null 2>&1
+}
+
 stop_server() {
+    if ! container_exists; then
+        log "Container ${SERVER_NAME} ist nicht vorhanden; nichts zu stoppen."
+        return 0
+    fi
     log "Stoppe Server ${SERVER_NAME}..."
-    docker stop "$SERVER_NAME" >/dev/null 2>&1 || true
+    docker container stop "$SERVER_NAME" >/dev/null 2>&1 || true
 }
 
 desired_container_config_hash() {
@@ -166,13 +174,13 @@ desired_container_config_hash() {
 
 current_container_config_hash() {
     local value
-    value="$(docker inspect "$SERVER_NAME" --format '{{ index .Config.Labels "minecraftdocker.webui.config-hash" }}' 2>/dev/null || true)"
+    value="$(docker container inspect "$SERVER_NAME" --format '{{ index .Config.Labels "minecraftdocker.webui.config-hash" }}' 2>/dev/null || true)"
     [[ "$value" == "<no value>" ]] && value=""
     printf "%s" "$value"
 }
 
 current_container_env() {
-    docker inspect "$SERVER_NAME" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true
+    docker container inspect "$SERVER_NAME" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true
 }
 
 env_has_exact() {
@@ -209,7 +217,7 @@ container_needs_recreate() {
     fi
 
     local current_image
-    current_image="$(docker inspect "$SERVER_NAME" --format '{{.Config.Image}}' 2>/dev/null || true)"
+    current_image="$(docker container inspect "$SERVER_NAME" --format '{{.Config.Image}}' 2>/dev/null || true)"
     if [[ -n "$current_image" && "$current_image" != "$DOCKER_IMAGE" ]]; then
         log "Container ${SERVER_NAME} nutzt noch Image ${current_image} statt ${DOCKER_IMAGE}; erstelle ihn neu."
         return 0
@@ -264,7 +272,7 @@ container_needs_recreate() {
 }
 
 start_server() {
-    if ! docker inspect "$SERVER_NAME" >/dev/null 2>&1; then
+    if ! container_exists; then
         log "Container ${SERVER_NAME} wurde noch nicht gefunden; erstelle ihn mit Anwenden."
         apply_container
         return
@@ -274,7 +282,7 @@ start_server() {
         return
     fi
     log "Starte Server ${SERVER_NAME}..."
-    docker start "$SERVER_NAME"
+    docker container start "$SERVER_NAME"
 }
 
 create_backup() {
@@ -311,7 +319,11 @@ apply_container() {
 
     stop_server
     log "Entferne alten Docker-Container ${SERVER_NAME}..."
-    docker rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
+    if container_exists; then
+        docker container rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
+    else
+        log "Kein alter Docker-Container ${SERVER_NAME} vorhanden."
+    fi
 
     local mount_path game_port
     mount_path="$(container_data_mount)"
@@ -379,7 +391,23 @@ apply_container() {
 
     if [[ "$DO_START_DOCKER" != "ja" ]]; then
         log "Stoppe den Docker-Container sofort wieder..."
-        docker stop "$SERVER_NAME" >/dev/null 2>&1 || true
+        docker container stop "$SERVER_NAME" >/dev/null 2>&1 || true
+    fi
+}
+
+print_status() {
+    if container_exists; then
+        docker container inspect "$SERVER_NAME" --format '{{.Name}} {{.State.Status}} {{.State.Running}} {{.NetworkSettings.IPAddress}}'
+    else
+        printf "%s missing false\n" "$SERVER_NAME"
+    fi
+}
+
+print_logs() {
+    if container_exists; then
+        docker container logs --tail "$LOG_LINES" "$SERVER_NAME"
+    else
+        printf "Container %s wurde noch nicht erstellt. Nutze Anwenden oder Start.\n" "$SERVER_NAME"
     fi
 }
 
@@ -856,7 +884,7 @@ case "${ACTION,,}" in
     restore) restore_backup ;;
     plugins) update_plugins ;;
     rcon) send_rcon_command ;;
-    status) docker inspect "$SERVER_NAME" --format '{{.Name}} {{.State.Status}} {{.State.Running}} {{.NetworkSettings.IPAddress}}' ;;
-    logs) docker logs --tail "$LOG_LINES" "$SERVER_NAME" ;;
+    status) print_status ;;
+    logs) print_logs ;;
     *) echo "Unknown action: $ACTION" >&2; exit 2 ;;
 esac

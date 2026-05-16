@@ -176,7 +176,7 @@ def run_command(args, timeout=60):
 
 
 def docker_status(config):
-    result = run_command(["docker", "inspect", config.get("container_name", ""), "--format", "{{json .State}}"], timeout=15)
+    result = run_command(["docker", "container", "inspect", config.get("container_name", ""), "--format", "{{json .State}}"], timeout=15)
     if not result["ok"]:
         return {"state": "missing", "running": False}
     try:
