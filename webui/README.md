@@ -1,12 +1,22 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.2`
+Version: `v1.0.3`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
 Host-WebUI fuer Minecraft-Server in Docker. Die WebUI speichert Serverprofile als JSON unter
 `~/.minecraftdocker-webui/servers`, schreibt daraus temporaere Shell-Config-Dateien und ruft `webui/backend.sh`
 nicht-interaktiv auf.
+
+## Screenshots
+
+Live-Beispiel einer laufenden WebUI-Instanz:
+
+![WebUI Dashboard](docs/images/webui-dashboard-live.png)
+
+Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
+
+![WebUI Hilfe](docs/images/webui-help-live.png)
 
 ## Start
 
