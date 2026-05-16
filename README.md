@@ -82,7 +82,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.4
+v1.0.5
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -112,8 +112,12 @@ Das Profil wird links ausgegraut und mit Status `deaktiviert` angezeigt.
 Deaktivierte Profile blockieren die Portpruefung nicht. So kann zum Beispiel ein alter Server
 kurz deaktiviert werden, waehrend ein anderes Profil denselben Host-Port testweise nutzt. Aktive
 Profile mit gleichem Host-Port blockieren weiterhin, damit nicht versehentlich zwei Container auf
-denselben Port starten. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktiviertes Profil nach
-erfolgreicher Aktion automatisch wieder.
+denselben Port starten.
+
+Wenn ein deaktiviertes Profil ausgewaehlt ist, wechselt der Button von `Deaktivieren` zu
+`Aktivieren`. `Aktivieren` startet keinen Container, sondern nimmt das Profil nur wieder in Status-
+und Portpruefung auf. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktiviertes Profil nach
+erfolgreicher Aktion ebenfalls automatisch wieder.
 
 ## Spieler und RCON
 
@@ -215,4 +219,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.4` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.5` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

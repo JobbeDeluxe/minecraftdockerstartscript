@@ -7,13 +7,13 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.4</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.5</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
 <form id="editor"></form>
 <div class="box"><h2>Portpruefung</h2><div id="warnings" class="warnings muted">Noch keine Pruefung.</div></div>
-<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button data-action="disable">Deaktivieren</button><button class="warn" data-action="backup">Backup</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
+<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button id="profileToggle" data-action="disable">Deaktivieren</button><button class="warn" data-action="backup">Backup</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
 <iframe id="mapFrame" class="map-frame" hidden title="BlueMap"></iframe>
 <div class="box"><h2>Spieler <span id="playerSummary" class="muted"></span></h2><div class="actions"><select id="players"></select><input id="playerName" placeholder="Spielername manuell"><button id="refreshPlayers" type="button">Spieler laden</button></div><div class="actions"><input id="targetPlayer" placeholder="Zielspieler fuer TP"><button data-rcon-shortcut="tp" type="button">TP zu Spieler</button><input id="giveItem" placeholder="minecraft:diamond"><input id="giveAmount" type="number" min="1" value="1"><button data-rcon-shortcut="give" type="button">Give</button><button data-rcon-shortcut="kick" type="button">Kick</button><button data-rcon-shortcut="ban" class="warn" type="button">Ban</button><button data-rcon-shortcut="pardon" type="button">Pardon</button></div></div>
 <div class="box"><h2>RCON Konsole</h2><div class="actions"><input id="rconCommand" placeholder="say Hallo Welt / list / save-all"><button id="sendRcon" type="button">Senden</button></div></div>
@@ -28,6 +28,7 @@ Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. S
 Stop haelt nur den Container an; geaenderte Docker-Einstellungen werden beim naechsten Start/Restart erkannt.
 Deaktivieren entfernt nur den Docker-Container und markiert das Profil als deaktiviert. Profil und Daten bleiben erhalten, der Host-Port wird frei.
 Deaktivierte Profile werden links ausgegraut und als deaktiviert angezeigt. Ihre Ports blockieren andere Profile nicht mehr.
+Bei deaktivierten Profilen wird aus dem Button Deaktivieren automatisch Aktivieren. Aktivieren startet keinen Container, sondern nimmt das Profil nur wieder in Status- und Portpruefung auf.
 Anwenden, Start oder Restart aktiviert ein deaktiviertes Profil wieder, wenn die Aktion erfolgreich ist.
 
 Profilfelder
@@ -82,6 +83,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.4"></script>
+<script src="/static/app.js?v=1.0.5"></script>
 </body>
 </html>

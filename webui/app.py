@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.4"
+APP_VERSION = "v1.0.5"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -782,10 +782,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"message": "server.properties gespeichert. Einige Einstellungen brauchen einen Restart."})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action":
                 action = self.read_json().get("action", "apply")
-                if action not in {"apply", "start", "stop", "restart", "disable", "backup", "plugins"}:
+                if action not in {"apply", "start", "stop", "restart", "disable", "enable", "backup", "plugins"}:
                     self.send_json({"error": "unsupported action"}, 400)
                     return
                 config = read_server(parts[2])
+                if action == "enable":
+                    set_server_disabled(parts[2], False)
+                    self.send_json({
+                        "ok": True,
+                        "code": 0,
+                        "stdout": "Profil wurde aktiviert und wird wieder in Status- und Portpruefung einbezogen.",
+                        "stderr": "",
+                    })
+                    return
                 result = run_backend_action(config, action)
                 if result.get("ok"):
                     if action == "disable":

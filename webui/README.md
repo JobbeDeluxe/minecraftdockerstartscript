@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.4`
+Version: `v1.0.5`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -60,8 +60,10 @@ Status `deaktiviert` angezeigt.
 
 Deaktivierte Profile geben ihre Ports fuer andere Profile frei. Die Portpruefung ignoriert nur
 wirklich deaktivierte Profile; aktive Profile mit gleichem Host-Port blockieren weiterhin. Sobald
-du bei einem deaktivierten Profil `Anwenden`, `Start` oder `Restart` erfolgreich ausfuehrst, wird
-das Profil automatisch wieder aktiviert.
+du ein deaktiviertes Profil auswaehlst, wechselt der Button von `Deaktivieren` zu `Aktivieren`.
+`Aktivieren` startet keinen Container, sondern nimmt das Profil nur wieder in Status- und
+Portpruefung auf. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktiviertes Profil nach
+erfolgreicher Aktion ebenfalls automatisch wieder.
 
 ## Backend-Modus
 
