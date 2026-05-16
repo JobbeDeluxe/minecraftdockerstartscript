@@ -545,7 +545,7 @@ def write_temp_env(config):
 
 
 def run_backend_action(config, action):
-    if action == "apply":
+    if action in {"apply", "start", "restart"}:
         blockers = [w for w in port_warnings(config) if w.startswith("eula:") or "kollidiert" in w or "doppelt" in w]
         if blockers:
             return {"ok": False, "code": 2, "stdout": "", "stderr": "\n".join(blockers)}

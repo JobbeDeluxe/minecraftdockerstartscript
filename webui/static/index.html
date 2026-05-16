@@ -24,8 +24,8 @@
 <div class="box"><h2>Dateien</h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Hoch</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="actions"><select id="fileEntries"></select><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div><pre id="fileList" class="small-output"></pre></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
-Speichern sichert nur das WebUI-Profil. Druecke danach Anwenden, damit Version, RAM, Ports, Docker-Image, RCON und Volumes wirklich im Docker-Container aktiv werden.
-Start startet einen vorhandenen Container. Wenn noch keiner existiert, erstellt Start ihn automatisch wie Anwenden. Restart startet nur den bestehenden Container neu.
+Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
+Stop haelt nur den Container an; geaenderte Docker-Einstellungen werden beim naechsten Start/Restart erkannt.
 
 Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.

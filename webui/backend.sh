@@ -144,9 +144,132 @@ stop_server() {
     docker stop "$SERVER_NAME" >/dev/null 2>&1 || true
 }
 
+desired_container_config_hash() {
+    normalize_image_for_type
+    {
+        printf "DATA_DIR=%s\n" "$DATA_DIR"
+        printf "DOCKER_IMAGE=%s\n" "$DOCKER_IMAGE"
+        printf "HOST_PORT=%s\n" "$HOST_PORT"
+        printf "EXTRA_PORTS=%s\n" "$EXTRA_PORTS"
+        printf "MEMORY=%s\n" "$MEMORY"
+        printf "INIT_MEMORY=%s\n" "$INIT_MEMORY"
+        printf "MAX_MEMORY=%s\n" "$MAX_MEMORY"
+        printf "TYPE=%s\n" "$TYPE"
+        printf "VERSION=%s\n" "$VERSION"
+        printf "PAPER_CHANNEL=%s\n" "$PAPER_CHANNEL"
+        printf "RCON_ENABLED=%s\n" "$RCON_ENABLED"
+        printf "RCON_PASSWORD=%s\n" "$RCON_PASSWORD"
+        printf "RCON_HOST_PORT=%s\n" "$RCON_HOST_PORT"
+        printf "RCON_CONTAINER_PORT=%s\n" "$RCON_CONTAINER_PORT"
+    } | sha256sum | awk '{print $1}'
+}
+
+current_container_config_hash() {
+    local value
+    value="$(docker inspect "$SERVER_NAME" --format '{{ index .Config.Labels "minecraftdocker.webui.config-hash" }}' 2>/dev/null || true)"
+    [[ "$value" == "<no value>" ]] && value=""
+    printf "%s" "$value"
+}
+
+current_container_env() {
+    docker inspect "$SERVER_NAME" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null || true
+}
+
+env_has_exact() {
+    local env_text="$1"
+    local expected="$2"
+    printf "%s\n" "$env_text" | grep -Fxq "$expected"
+}
+
+env_has_key() {
+    local env_text="$1"
+    local key="$2"
+    printf "%s\n" "$env_text" | grep -Eq "^${key}="
+}
+
+require_env_or_recreate() {
+    local env_text="$1"
+    local expected="$2"
+    if ! env_has_exact "$env_text" "$expected"; then
+        log "Container ${SERVER_NAME} nutzt noch alte Einstellungen (${expected} fehlt); erstelle ihn neu."
+        return 0
+    fi
+    return 1
+}
+
+container_needs_recreate() {
+    normalize_image_for_type
+
+    local desired_hash current_hash
+    desired_hash="$(desired_container_config_hash)"
+    current_hash="$(current_container_config_hash)"
+    if [[ -n "$current_hash" && "$current_hash" != "$desired_hash" ]]; then
+        log "Container ${SERVER_NAME} passt nicht mehr zum Profil; erstelle ihn neu."
+        return 0
+    fi
+
+    local current_image
+    current_image="$(docker inspect "$SERVER_NAME" --format '{{.Config.Image}}' 2>/dev/null || true)"
+    if [[ -n "$current_image" && "$current_image" != "$DOCKER_IMAGE" ]]; then
+        log "Container ${SERVER_NAME} nutzt noch Image ${current_image} statt ${DOCKER_IMAGE}; erstelle ihn neu."
+        return 0
+    fi
+
+    local env_text
+    env_text="$(current_container_env)"
+    require_env_or_recreate "$env_text" "MEMORY=$MEMORY" && return 0
+    require_env_or_recreate "$env_text" "TYPE=$TYPE" && return 0
+
+    if [[ -n "${INIT_MEMORY:-}" ]]; then
+        require_env_or_recreate "$env_text" "INIT_MEMORY=$INIT_MEMORY" && return 0
+    elif env_has_key "$env_text" "INIT_MEMORY"; then
+        log "Container ${SERVER_NAME} nutzt noch INIT_MEMORY, obwohl das Profil leer ist; erstelle ihn neu."
+        return 0
+    fi
+
+    if [[ -n "${MAX_MEMORY:-}" ]]; then
+        require_env_or_recreate "$env_text" "MAX_MEMORY=$MAX_MEMORY" && return 0
+    elif env_has_key "$env_text" "MAX_MEMORY"; then
+        log "Container ${SERVER_NAME} nutzt noch MAX_MEMORY, obwohl das Profil leer ist; erstelle ihn neu."
+        return 0
+    fi
+
+    if is_proxy_type; then
+        case "${TYPE^^}" in
+            VELOCITY)
+                if [[ -n "${VERSION:-}" && "${VERSION^^}" != "LATEST" ]]; then
+                    require_env_or_recreate "$env_text" "VELOCITY_VERSION=$VERSION" && return 0
+                elif env_has_key "$env_text" "VELOCITY_VERSION"; then
+                    log "Container ${SERVER_NAME} nutzt noch eine feste VELOCITY_VERSION; erstelle ihn neu."
+                    return 0
+                fi
+                ;;
+            WATERFALL)
+                if [[ -n "${VERSION:-}" && "${VERSION^^}" != "LATEST" ]]; then
+                    require_env_or_recreate "$env_text" "WATERFALL_VERSION=$VERSION" && return 0
+                elif env_has_key "$env_text" "WATERFALL_VERSION"; then
+                    log "Container ${SERVER_NAME} nutzt noch eine feste WATERFALL_VERSION; erstelle ihn neu."
+                    return 0
+                fi
+                ;;
+        esac
+    else
+        [[ -n "${VERSION:-}" ]] && require_env_or_recreate "$env_text" "VERSION=$VERSION" && return 0
+        if [[ "${TYPE^^}" == "PAPER" && -n "${PAPER_CHANNEL:-}" ]]; then
+            require_env_or_recreate "$env_text" "PAPER_CHANNEL=$PAPER_CHANNEL" && return 0
+        fi
+    fi
+
+    return 1
+}
+
 start_server() {
     if ! docker inspect "$SERVER_NAME" >/dev/null 2>&1; then
         log "Container ${SERVER_NAME} wurde noch nicht gefunden; erstelle ihn mit Anwenden."
+        apply_container
+        return
+    fi
+    if container_needs_recreate; then
         apply_container
         return
     fi
@@ -194,6 +317,9 @@ apply_container() {
     mount_path="$(container_data_mount)"
     game_port="$(container_game_port)"
 
+    local config_hash
+    config_hash="$(desired_container_config_hash)"
+
     local docker_args=(-d -p "${HOST_PORT}:${game_port}")
 
     local cleaned_ports="${EXTRA_PORTS//,/ }"
@@ -205,6 +331,7 @@ apply_container() {
     docker_args+=(
         -v "${DATA_DIR}:${mount_path}"
         --name "$SERVER_NAME"
+        --label "minecraftdocker.webui.config-hash=$config_hash"
         -e TZ=Europe/Berlin
         -e MEMORY="$MEMORY"
         -e TYPE="$TYPE"
