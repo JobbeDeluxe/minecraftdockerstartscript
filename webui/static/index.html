@@ -13,7 +13,7 @@
 <section class="content">
 <form id="editor"></form>
 <div class="box"><h2>Portpruefung</h2><div id="warnings" class="warnings muted">Noch keine Pruefung.</div></div>
-<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button class="warn" data-action="backup">Backup</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
+<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button data-action="disable">Deaktivieren</button><button class="warn" data-action="backup">Backup</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
 <iframe id="mapFrame" class="map-frame" hidden title="BlueMap"></iframe>
 <div class="box"><h2>Spieler <span id="playerSummary" class="muted"></span></h2><div class="actions"><select id="players"></select><input id="playerName" placeholder="Spielername manuell"><button id="refreshPlayers" type="button">Spieler laden</button></div><div class="actions"><input id="targetPlayer" placeholder="Zielspieler fuer TP"><button data-rcon-shortcut="tp" type="button">TP zu Spieler</button><input id="giveItem" placeholder="minecraft:diamond"><input id="giveAmount" type="number" min="1" value="1"><button data-rcon-shortcut="give" type="button">Give</button><button data-rcon-shortcut="kick" type="button">Kick</button><button data-rcon-shortcut="ban" class="warn" type="button">Ban</button><button data-rcon-shortcut="pardon" type="button">Pardon</button></div></div>
 <div class="box"><h2>RCON Konsole</h2><div class="actions"><input id="rconCommand" placeholder="say Hallo Welt / list / save-all"><button id="sendRcon" type="button">Senden</button></div></div>
@@ -26,6 +26,7 @@
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
 Stop haelt nur den Container an; geaenderte Docker-Einstellungen werden beim naechsten Start/Restart erkannt.
+Deaktivieren entfernt nur den Docker-Container. Profil und Daten bleiben erhalten, der Host-Port wird frei.
 
 Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
@@ -53,7 +54,7 @@ BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch 
 
 Backups und Dateien
 Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
-Server loeschen entfernt das Profil, den Docker-Container und den Datenordner.
+Deaktivieren entfernt nur den Container. Server loeschen entfernt das Profil, den Docker-Container und den Datenordner.
 Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
 
 Plugins

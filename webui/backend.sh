@@ -15,6 +15,7 @@ Actions:
   start    Start the existing Docker container
   stop     Stop the Docker container
   restart  Stop and start the Docker container
+  disable  Remove only the Docker container; keep profile and data
   backup   Stop the container and create a tar.gz backup
   restore  Restore BACKUP_FILE into DATA_DIR after stopping the container
   plugins  Update plugins listed in DATA_DIR/plugins.txt
@@ -409,6 +410,16 @@ print_logs() {
     else
         printf "Container %s wurde noch nicht erstellt. Nutze Anwenden oder Start.\n" "$SERVER_NAME"
     fi
+}
+
+disable_server() {
+    if ! container_exists; then
+        log "Container ${SERVER_NAME} ist nicht vorhanden; Profil und Daten bleiben erhalten."
+        return 0
+    fi
+    log "Deaktiviere Server ${SERVER_NAME}: entferne nur den Docker-Container."
+    docker container rm -f "$SERVER_NAME"
+    log "Server ${SERVER_NAME} deaktiviert. Profil und Daten bleiben erhalten."
 }
 
 download_file() {
@@ -880,6 +891,7 @@ case "${ACTION,,}" in
     start) start_server ;;
     stop) stop_server ;;
     restart) stop_server; start_server ;;
+    disable) disable_server ;;
     backup) create_backup ;;
     restore) restore_backup ;;
     plugins) update_plugins ;;

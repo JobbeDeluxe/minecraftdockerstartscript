@@ -110,7 +110,7 @@ def remove_container(container_name):
     name = str(container_name or "").strip()
     if not name:
         return ["Kein Containername im Profil gesetzt."]
-    result = run_command(["docker", "rm", "-f", name], timeout=60)
+    result = run_command(["docker", "container", "rm", "-f", name], timeout=60)
     stdout = result.get("stdout", "").strip()
     stderr = result.get("stderr", "").strip()
     if result.get("ok"):
@@ -737,7 +737,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"message": "server.properties gespeichert. Einige Einstellungen brauchen einen Restart."})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action":
                 action = self.read_json().get("action", "apply")
-                if action not in {"apply", "start", "stop", "restart", "backup", "plugins"}:
+                if action not in {"apply", "start", "stop", "restart", "disable", "backup", "plugins"}:
                     self.send_json({"error": "unsupported action"}, 400)
                     return
                 self.send_json(run_backend_action(read_server(parts[2]), action))
