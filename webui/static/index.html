@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.1</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.2</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -27,6 +27,8 @@
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
 Stop haelt nur den Container an; geaenderte Docker-Einstellungen werden beim naechsten Start/Restart erkannt.
 Deaktivieren entfernt nur den Docker-Container und markiert das Profil als deaktiviert. Profil und Daten bleiben erhalten, der Host-Port wird frei.
+Deaktivierte Profile werden links ausgegraut und als deaktiviert angezeigt. Ihre Ports blockieren andere Profile nicht mehr.
+Anwenden, Start oder Restart aktiviert ein deaktiviertes Profil wieder, wenn die Aktion erfolgreich ist.
 
 Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
@@ -41,6 +43,7 @@ Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft und Velocity n
 Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
+Die Portpruefung ignoriert nur Profile, die wirklich deaktiviert sind. Aktive Profile mit gleichem Host-Port blockieren weiterhin, damit nicht versehentlich zwei Server auf denselben Port starten.
 
 Version und RAM
 Memory: allgemeiner RAM-Wert fuer das Docker-Image. Eingaben wie 1GB werden als 1G gespeichert.
@@ -79,6 +82,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.1"></script>
+<script src="/static/app.js?v=1.0.2"></script>
 </body>
 </html>

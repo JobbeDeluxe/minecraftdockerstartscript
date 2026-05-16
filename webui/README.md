@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.1`
+Version: `v1.0.2`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -39,7 +39,19 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - Spieleranzahl und einfache Spielerliste per RCON `list` anzeigen
 - RCON-Schnellbefehle fuer `tp`, `give`, `kick`, `ban` und `pardon`
 - BlueMap ueber die WebUI unter `/map/<server-id>/` proxien und einbetten
+- Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
+
+## Deaktivierte Profile
+
+`Deaktivieren` entfernt nur den Docker-Container und setzt das Profil auf `deaktiviert`.
+Profil und Datenordner bleiben erhalten. In der WebUI wird das Profil links ausgegraut und mit
+Status `deaktiviert` angezeigt.
+
+Deaktivierte Profile geben ihre Ports fuer andere Profile frei. Die Portpruefung ignoriert nur
+wirklich deaktivierte Profile; aktive Profile mit gleichem Host-Port blockieren weiterhin. Sobald
+du bei einem deaktivierten Profil `Anwenden`, `Start` oder `Restart` erfolgreich ausfuehrst, wird
+das Profil automatisch wieder aktiviert.
 
 ## Backend-Modus
 
