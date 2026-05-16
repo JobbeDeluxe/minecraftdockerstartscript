@@ -4,7 +4,15 @@ Eine hostbasierte Weboberflaeche zum Erstellen, Starten, Ueberwachen und Pflegen
 
 Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, aber der Hauptfokus ist jetzt eine vollwertige WebUI fuer mehrere Serverprofile, Docker-Steuerung, Logs, RCON, Backups, Plugin-Management, BlueMap, Spieleraktionen und Datei-/Konfig-Verwaltung.
 
-![Dashboard](docs/screenshots/dashboard.png)
+## Screenshots
+
+Dashboard einer laufenden WebUI-Instanz:
+
+![Dashboard](webui/docs/images/webui-dashboard-live.png)
+
+Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
+
+![Hilfe](webui/docs/images/webui-help-live.png)
 
 ## Was die WebUI kann
 
@@ -13,7 +21,9 @@ Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, a
 - Proxy-Server ueber `itzg/mc-proxy`: Velocity, BungeeCord und Waterfall
 - Docker-Aktionen: Anwenden, Start, Stop, Restart und Backup
 - Start erstellt bei neuen Profilen automatisch einen fehlenden Container
+- Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Portpruefung gegen andere Profile und laufende Docker-Container
+- Deaktivierte Profile werden ausgegraut, als `deaktiviert` markiert und geben ihre Ports frei
 - EULA, RAM, Version, Paper-Channel, RCON, Extra-Ports und Backup-Pfad direkt im Browser setzen
 - Versionsfeld mit manueller Eingabe plus Versionsliste/Refresh
 - Live-Logs und normales Logfenster
@@ -34,8 +44,6 @@ Das Projekt ist nicht mehr nur ein Startscript. Der CLI-Modus bleibt erhalten, a
 - Import aus `.tar.gz`/`.tgz` Backups als neues Serverprofil
 - BlueMap oeffnen oder direkt in der WebUI einbetten
 - BlueMap-Proxy unter `/map/<server-id>/`, damit spaeter ein Reverse Proxy auf die WebUI reicht
-
-![Management](docs/screenshots/management.png)
 
 ## Schnellstart
 
@@ -74,7 +82,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.0-rc1
+v1.0.4
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -95,6 +103,17 @@ VELOCITY, BUNGEECORD, WATERFALL
 ```
 
 Bei Proxy-Typen setzt die WebUI automatisch das passende Image, mountet den Datenordner nach `/server` und nutzt die passenden internen Ports. Fuer Velocity koennen `velocity.toml`, `forwarding.secret` und weitere Textdateien ueber den Datei-/Konfig-Editor bearbeitet werden.
+
+## Deaktivierte Profile
+
+`Deaktivieren` entfernt nur den Docker-Container. Profil und Datenordner bleiben erhalten.
+Das Profil wird links ausgegraut und mit Status `deaktiviert` angezeigt.
+
+Deaktivierte Profile blockieren die Portpruefung nicht. So kann zum Beispiel ein alter Server
+kurz deaktiviert werden, waehrend ein anderes Profil denselben Host-Port testweise nutzt. Aktive
+Profile mit gleichem Host-Port blockieren weiterhin, damit nicht versehentlich zwei Container auf
+denselben Port starten. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktiviertes Profil nach
+erfolgreicher Aktion automatisch wieder.
 
 ## Spieler und RCON
 
@@ -169,8 +188,6 @@ Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner
 
 ## Hilfe im WebUI
 
-![Hilfe](docs/screenshots/help.png)
-
 Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap und den Unterschied zwischen `Speichern` und `Anwenden`.
 
 ## CLI-Modus
@@ -198,4 +215,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.0-rc1` ist als erster oeffentlicher Release-Kandidat gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.4` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.3`
+Version: `v1.0.4`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
