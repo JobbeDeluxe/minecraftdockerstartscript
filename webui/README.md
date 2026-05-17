@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.7`
+Version: `v1.0.8`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -134,6 +134,8 @@ Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Upda
 `Lokale Konfigs laden` aktualisiert die Dateiauswahl fuer Textdateien unter `plugins/`, `config/` und im Datenordner. Beim Auswaehlen einer Datei wird ihr Inhalt automatisch geladen. `Inhalt neu laden` laedt die aktuell gewaehlte Datei erneut.
 
 ## RCON und Ports
+
+Bei Velocity liest die WebUI den internen Port aus `velocity.toml` (`bind`) und mappt den Host-Port auf diesen Container-Port. Dadurch funktioniert zum Beispiel ein Host-Port `25565`, obwohl Velocity im Container auf `25577` lauscht.
 
 Bei mehreren Servern kann der interne RCON-Port meist `25575` bleiben. Der Host-Port muss eindeutig sein:
 

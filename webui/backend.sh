@@ -104,8 +104,32 @@ container_data_mount() {
     fi
 }
 
+velocity_bind_port() {
+    local file line bind
+    for file in "${DATA_DIR}/velocity.toml" "${DATA_DIR}/config/velocity.toml"; do
+        [[ -f "$file" ]] || continue
+        line="$(grep -E '^[[:space:]]*bind[[:space:]]*=' "$file" | tail -n 1 || true)"
+        [[ -n "${line:-}" ]] || continue
+        bind="${line#*=}"
+        bind="${bind%%#*}"
+        bind="$(printf "%s" "$bind" | tr -d '[:space:]' | tr -d "\"'")"
+        if [[ "$bind" =~ :([0-9]+)$ ]]; then
+            printf "%s" "${BASH_REMATCH[1]}"
+            return 0
+        fi
+        if [[ "$bind" =~ ^[0-9]+$ ]]; then
+            printf "%s" "$bind"
+            return 0
+        fi
+    done
+    return 1
+}
+
 container_game_port() {
     case "${TYPE^^}" in
+        VELOCITY)
+            velocity_bind_port || printf "25565"
+            ;;
         BUNGEECORD|WATERFALL)
             printf "25577"
             ;;
@@ -160,6 +184,7 @@ desired_container_config_hash() {
         printf "DOCKER_IMAGE=%s\n" "$DOCKER_IMAGE"
         printf "HOST_PORT=%s\n" "$HOST_PORT"
         printf "EXTRA_PORTS=%s\n" "$EXTRA_PORTS"
+        is_proxy_type && printf "GAME_PORT=%s\n" "$(container_game_port)"
         printf "MEMORY=%s\n" "$MEMORY"
         printf "INIT_MEMORY=%s\n" "$INIT_MEMORY"
         printf "MAX_MEMORY=%s\n" "$MAX_MEMORY"
@@ -350,6 +375,9 @@ apply_container() {
     local mount_path game_port
     mount_path="$(container_data_mount)"
     game_port="$(container_game_port)"
+    if [[ "${TYPE^^}" == "VELOCITY" ]]; then
+        log "Velocity interner Port fuer Docker-Mapping: ${game_port} (Host ${HOST_PORT} -> Container ${game_port})."
+    fi
 
     local config_hash
     config_hash="$(desired_container_config_hash)"
@@ -379,6 +407,7 @@ apply_container() {
     [[ -n "${INIT_MEMORY:-}" ]] && docker_args+=(-e "INIT_MEMORY=$INIT_MEMORY")
     [[ -n "${MAX_MEMORY:-}" ]] && docker_args+=(-e "MAX_MEMORY=$MAX_MEMORY")
     if is_proxy_type; then
+        docker_args+=(-e "SERVER_PORT=$game_port")
         case "${TYPE^^}" in
             VELOCITY)
                 [[ -n "${VERSION:-}" && "${VERSION^^}" != "LATEST" ]] && docker_args+=(-e "VELOCITY_VERSION=$VERSION")

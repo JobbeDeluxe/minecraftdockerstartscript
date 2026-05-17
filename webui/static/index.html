@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.7</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.8</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -40,7 +40,7 @@ Typ: normale Minecraft-Typen nutzen itzg/minecraft-server. BungeeCord, Waterfall
 Docker Image: bei leerem oder Standardwert setzt die WebUI das passende Image automatisch.
 
 Ports und RCON
-Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft und Velocity nutzen intern 25565, BungeeCord/Waterfall intern 25577.
+Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft nutzt intern 25565. Velocity nutzt den bind-Port aus velocity.toml, sonst 25565. BungeeCord/Waterfall nutzen intern 25577.
 Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
 RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
 RCON Container-Port: kann meist 25575 bleiben.
@@ -85,6 +85,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.7"></script>
+<script src="/static/app.js?v=1.0.8"></script>
 </body>
 </html>
