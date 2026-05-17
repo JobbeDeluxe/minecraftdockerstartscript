@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.8"
+APP_VERSION = "v1.0.9"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -152,7 +152,7 @@ def delete_data_dir(config):
         return ["Kein Datenordner im Profil gesetzt."]
     target = Path(raw).expanduser().resolve()
     roots = [STATE_DIR.resolve(), ROOT.resolve()]
-    if target.parent == target or len(target.parts) < 3 or any(target == root or target in root.parents for root in roots):
+    if target.parent == target or len(target.parts) < 3 or any(target == root or target in root.parents or root in target.parents for root in roots):
         raise ValueError(f"Datenordner wird aus Sicherheitsgruenden nicht geloescht: {target}")
     if not target.exists():
         return [f"Datenordner war nicht vorhanden: {target}"]
@@ -174,6 +174,14 @@ def delete_server(server_id):
         path.unlink()
         details.append(f"Serverprofil {server_id} geloescht.")
     return {"message": f"Server {server_id} geloescht.", "details": details}
+
+
+def delete_local_data(config):
+    details = []
+    details.extend(remove_container(config.get("container_name")))
+    details.extend(delete_data_dir(config))
+    details.append("Profil bleibt erhalten. Start oder Anwenden legt Container und Daten neu an.")
+    return {"ok": True, "code": 0, "stdout": "\n".join(details), "stderr": ""}
 
 
 def list_servers():
@@ -782,7 +790,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"message": "server.properties gespeichert. Einige Einstellungen brauchen einen Restart."})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action":
                 action = self.read_json().get("action", "apply")
-                if action not in {"apply", "start", "stop", "restart", "disable", "enable", "backup", "plugins"}:
+                if action not in {"apply", "start", "stop", "restart", "disable", "enable", "backup", "plugins", "delete-data"}:
                     self.send_json({"error": "unsupported action"}, 400)
                     return
                 config = read_server(parts[2])
@@ -794,6 +802,9 @@ class Handler(BaseHTTPRequestHandler):
                         "stdout": "Profil wurde aktiviert und wird wieder in Status- und Portpruefung einbezogen.",
                         "stderr": "",
                     })
+                    return
+                if action == "delete-data":
+                    self.send_json(delete_local_data(config))
                     return
                 result = run_backend_action(config, action)
                 if result.get("ok"):

@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.8`
+Version: `v1.0.9`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -40,7 +40,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 ## Was aktuell funktioniert
 
 - Serverprofile anlegen und speichern
-- Docker-Container per Profil anwenden, starten, stoppen, neu starten
+- Docker-Container per Profil anwenden, starten, stoppen und entfernen, neu starten
 - Backup-Aktionen ueber den Backend-Runner ausloesen
 - RCON pro Server aktivieren, Passwort setzen und Host-/Container-Port getrennt konfigurieren
 - Offensichtliche Port-Konflikte zwischen Profilen, laufenden Docker-Containern und TCP-Ports anzeigen
@@ -50,6 +50,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - RCON-Schnellbefehle fuer `tp`, `give`, `kick`, `ban` und `pardon`
 - BlueMap ueber die WebUI unter `/map/<server-id>/` proxien und einbetten
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
+- Lokale Serverdaten loeschen, ohne Profil oder zentrale Backups zu entfernen
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 
 ## Deaktivierte Profile

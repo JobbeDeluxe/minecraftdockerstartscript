@@ -19,8 +19,9 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Mehrere Serverprofile mit eigener ID, eigenem Namen, Container, Datenordner, RAM, Minecraft-Version und Ports
 - Minecraft-Server ueber `itzg/minecraft-server`: Paper, Folia, Purpur, Vanilla, Fabric, Forge, Quilt und weitere Image-Typen
 - Proxy-Server ueber `itzg/mc-proxy`: Velocity, BungeeCord und Waterfall
-- Docker-Aktionen: Anwenden, Start, Stop, Restart und Backup
+- Docker-Aktionen: Anwenden, Start, Stop mit Container-Entfernung, Restart und Backup
 - Start erstellt bei neuen Profilen automatisch einen fehlenden Container
+- Lokale Daten eines Profils loeschen, ohne Profil oder zentrale Backups zu entfernen
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Portpruefung gegen andere Profile und laufende Docker-Container
 - Deaktivierte Profile werden ausgegraut, als `deaktiviert` markiert und geben ihre Ports frei
@@ -82,7 +83,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.8
+v1.0.9
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -225,4 +226,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.8` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.9` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

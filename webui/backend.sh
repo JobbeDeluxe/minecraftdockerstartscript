@@ -13,7 +13,7 @@ Usage: webui/backend.sh --config server.env --action apply
 Actions:
   apply    Recreate the configured Docker container from the config
   start    Start the existing Docker container
-  stop     Stop the Docker container
+  stop     Stop and remove the Docker container; keep profile and data
   restart  Stop and start the Docker container
   disable  Remove only the Docker container; keep profile and data
   backup   Stop the container and create a tar.gz backup
@@ -175,6 +175,9 @@ stop_server() {
     fi
     log "Stoppe Server ${SERVER_NAME}..."
     docker container stop "$SERVER_NAME" >/dev/null 2>&1 || true
+    log "Entferne Docker-Container ${SERVER_NAME}; Profil und Daten bleiben erhalten."
+    docker container rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
+    log "Container ${SERVER_NAME} wurde gestoppt und geloescht. Start oder Anwenden erstellt ihn neu."
 }
 
 desired_container_config_hash() {
