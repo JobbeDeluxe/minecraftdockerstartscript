@@ -82,7 +82,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.6
+v1.0.7
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -182,6 +182,8 @@ Die WebUI enthaelt zwei Ebenen fuer Dateien:
 - Konfig-Editor fuer Textdateien wie `server.properties`, Plugin-Konfigs, `velocity.toml` und `forwarding.secret`
 - Datei-Manager fuer Ordner, Welten, Uploads, Umbenennen, Loeschen und ZIP-Import
 
+Bei Plugin-Konfigdateien aktualisiert `Lokale Konfigs laden` die Dateiauswahl. Sobald eine Datei im Dropdown ausgewaehlt wird, laedt die WebUI ihren Inhalt automatisch; `Inhalt neu laden` aktualisiert die aktuell geoeffnete Datei erneut.
+
 Der ZIP-Upload ist fuer Welt-Importe oder Datenaustausch gedacht. Entpackt wird in den aktuell ausgewaehlten Ordner innerhalb des Server-Datenverzeichnisses.
 
 ## Backups und Import
@@ -223,4 +225,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.6` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.7` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

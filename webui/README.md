@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.6`
+Version: `v1.0.7`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -128,6 +128,10 @@ Zeilen mit `#` am Anfang sind deaktiviert. CoreProtect wird aus dem GitHub-Sourc
 kein `git`, aber `curl`/`wget` und entweder `mvn` oder Docker, damit der Maven-Container genutzt werden kann.
 SpigotMC-/BukkitDev-Projektseiten sind in der Regel keine direkten JAR-Downloads. Die WebUI lehnt heruntergeladene
 Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Update dann mit Fehlercode.
+
+## Plugin-Konfig
+
+`Lokale Konfigs laden` aktualisiert die Dateiauswahl fuer Textdateien unter `plugins/`, `config/` und im Datenordner. Beim Auswaehlen einer Datei wird ihr Inhalt automatisch geladen. `Inhalt neu laden` laedt die aktuell gewaehlte Datei erneut.
 
 ## RCON und Ports
 
