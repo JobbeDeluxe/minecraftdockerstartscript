@@ -39,6 +39,7 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Manuelle Plugin-JARs hochladen und loeschen
 - Installierte Plugins anzeigen und aus dem Plugin-Ordner entfernen
 - Plugin-Konfigdateien direkt bearbeiten, zum Beispiel unter `plugins/`, `config/` oder im Datenordner
+- Plugin-Konfigdateien per Ordnernavigation laden, damit grosse Plugin-Ordner nicht als endlose Liste erscheinen
 - Velocity-Dateien wie `velocity.toml` und `forwarding.secret` editieren
 - Datei-Manager fuer Serverdaten: Ordner per Klick oeffnen, zurueck navigieren, Ordner erstellen, umbenennen und loeschen
 - ZIP-Upload zum Importieren oder Austauschen von Welten und Daten
@@ -84,7 +85,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.10
+v1.0.11
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -184,11 +185,11 @@ Die WebUI enthaelt zwei Ebenen fuer Dateien:
 - Konfig-Editor fuer Textdateien wie `server.properties`, Plugin-Konfigs, `velocity.toml` und `forwarding.secret`
 - Datei-Manager fuer Ordner, Welten, Uploads, Umbenennen, Loeschen und ZIP-Import
 
-Bei Plugin-Konfigdateien aktualisiert `Lokale Konfigs laden` die Dateiauswahl. Sobald eine Datei im Dropdown ausgewaehlt wird, laedt die WebUI ihren Inhalt automatisch; `Inhalt neu laden` aktualisiert die aktuell geoeffnete Datei erneut.
+Bei Plugin-Konfigdateien aktualisiert `Lokale Konfigs laden` den aktuellen Konfig-Ordner. Ordner koennen direkt geoeffnet werden, `Zurueck` geht eine Ebene hoch. Sobald eine Datei im Dropdown ausgewaehlt wird, laedt die WebUI ihren Inhalt automatisch; `Inhalt neu laden` aktualisiert die aktuell geoeffnete Datei erneut.
 
 Der ZIP-Upload ist fuer Welt-Importe oder Datenaustausch gedacht. Entpackt wird in den aktuell ausgewaehlten Ordner innerhalb des Server-Datenverzeichnisses.
 
-Wenn das Datenverzeichnis nachtraeglich korrigiert werden muss, kann der neue Pfad im Profil eingetragen und mit `Daten verschieben` uebernommen werden. Die WebUI entfernt dabei den Container, verschiebt den alten Datenordner an den neuen Pfad und aktualisiert das Profil. Der Datei-Browser trennt Ordner und Dateien; ein Klick auf einen Ordner oeffnet ihn, `Zurueck` geht eine Ebene hoch.
+Wenn das Datenverzeichnis nachtraeglich korrigiert werden muss, kann der neue Pfad im Profil eingetragen und mit `Daten verschieben` uebernommen werden. Die WebUI entfernt dabei den Container, verschiebt den alten Datenordner an den neuen Pfad und aktualisiert das Profil. Der Datei-Browser trennt Ordner und Dateien; ein Klick auf einen Ordner oeffnet ihn, `Zurueck` geht eine Ebene hoch. Die Plugin-Konfig nutzt ebenfalls Ordnernavigation und zeigt nur die Konfigdateien im aktuellen Ordner.
 
 ## Backups und Import
 
@@ -229,4 +230,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.10` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.11` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

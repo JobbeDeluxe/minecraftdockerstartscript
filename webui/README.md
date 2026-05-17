@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.10`
+Version: `v1.0.11`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -145,6 +145,8 @@ Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Upda
 ## Plugin-Konfig
 
 `Lokale Konfigs laden` aktualisiert die Dateiauswahl fuer Textdateien unter `plugins/`, `config/` und im Datenordner. Beim Auswaehlen einer Datei wird ihr Inhalt automatisch geladen. `Inhalt neu laden` laedt die aktuell gewaehlte Datei erneut.
+Die Plugin-Konfig nutzt Ordnernavigation: Ordner koennen direkt geoeffnet werden, `Zurueck`
+geht eine Ebene hoch, und es werden nur Konfigdateien im aktuellen Ordner angezeigt.
 
 ## RCON und Ports
 

@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.10</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.11</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -20,7 +20,7 @@
 <div class="box"><h2>Backups</h2><div class="actions"><select id="backups"></select><button id="restoreBackup" class="warn" type="button">Restore</button><input id="importId" placeholder="neue-server-id"><button id="importBackup" type="button">Als neuen Server importieren</button></div></div>
 <div class="box"><h2>server.properties <span id="propertiesDirty" class="warnings"></span></h2><textarea id="serverProperties" spellcheck="false"></textarea><div class="actions"><button id="saveProperties" type="button">server.properties speichern</button><button id="reloadProperties" type="button">Neu laden</button></div></div>
 <div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button><button id="refreshInstalledPlugins" type="button">Installierte Plugins laden</button><select id="installedPluginSelect"></select><button id="deleteInstalledPlugin" class="warn" type="button">Installiertes Plugin loeschen</button></div><pre id="installedPlugins" class="small-output"></pre></div>
-<div class="box"><h2>Plugin-Konfig <span id="pluginFileDirty" class="warnings"></span></h2><div class="actions"><select id="pluginFiles"></select><button id="refreshPluginFiles" type="button">Lokale Konfigs laden</button><button id="loadPluginFile" type="button">Inhalt neu laden</button><button id="savePluginFile" type="button">Datei speichern</button></div><textarea id="pluginFileContent" spellcheck="false" placeholder="Plugin-Konfig aus DATA_DIR/plugins oder DATA_DIR/config laden"></textarea></div>
+<div class="box"><h2>Plugin-Konfig <span id="pluginFileDirty" class="warnings"></span></h2><div class="actions"><input id="pluginFilePath" placeholder="Konfig-Ordner, leer = DATA_DIR"><button id="refreshPluginFiles" type="button">Lokale Konfigs laden</button><button id="upPluginFiles" type="button">Zurueck</button><button id="loadPluginFile" type="button">Inhalt neu laden</button><button id="savePluginFile" type="button">Datei speichern</button></div><div class="file-browser"><section class="file-pane"><h3>Ordner</h3><div id="pluginFileFolders" class="file-list"></div></section><section class="file-pane"><h3>Konfig-Dateien</h3><select id="pluginFiles" size="8"></select></section></div><textarea id="pluginFileContent" spellcheck="false" placeholder="Plugin-Konfig aus DATA_DIR/plugins oder DATA_DIR/config laden"></textarea></div>
 <div class="box"><h2>Dateien</h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Zurueck</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="file-browser"><section class="file-pane"><h3>Ordner</h3><div id="fileFolders" class="file-list"></div></section><section class="file-pane"><h3>Dateien</h3><select id="fileEntries" size="8"></select><pre id="fileList" class="small-output"></pre></section></div><div class="actions"><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
@@ -80,12 +80,12 @@ Beispiele:
 
 Plugin-Konfig
 Der Editor kann Textdateien direkt im Datenordner sowie unter plugins/ und config/ bearbeiten, z. B. velocity.toml oder forwarding.secret.
-Lokale Konfigs laden aktualisiert die Dateiliste. Beim Auswaehlen einer Datei wird der Inhalt automatisch geladen; Inhalt neu laden laedt die aktuell gewaehlte Datei erneut.
+Lokale Konfigs laden aktualisiert den aktuellen Konfig-Ordner. Ordner koennen direkt geoeffnet werden, Zurueck geht eine Ebene hoch. Beim Auswaehlen einer Datei wird der Inhalt automatisch geladen; Inhalt neu laden laedt die aktuell gewaehlte Datei erneut.
 Manuelle Plugins werden in DATA_DIR/plugins/manuell gespeichert und beim Containerstart geladen.
 CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein git, aber curl/wget und entweder mvn oder Docker fuer den Maven-Container.</pre><button id="closeHelp">Schliessen</button></div></dialog>
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.10"></script>
+<script src="/static/app.js?v=1.0.11"></script>
 </body>
 </html>

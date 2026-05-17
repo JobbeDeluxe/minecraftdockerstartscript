@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.10"
+APP_VERSION = "v1.0.11"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -413,22 +413,51 @@ def safe_plugin_file(config, relative_path):
     return target
 
 
-def list_plugin_files(config):
+def safe_plugin_browser_path(config, relative_path=""):
     data_dir = Path(config.get("data_dir", "")).resolve()
+    rel = Path(str(relative_path or "").replace("\\", "/"))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("Ungueltiger Plugin-Ordnerpfad.")
+    target = (data_dir / rel).resolve()
+    plugin_root = (data_dir / "plugins").resolve()
+    config_root = (data_dir / "config").resolve()
+    if target != data_dir and target not in {plugin_root, config_root} and not any(root in target.parents for root in (plugin_root, config_root)):
+        raise ValueError("Plugin-Konfig-Ordner duerfen nur DATA_DIR, plugins/ oder config/ sein.")
+    return data_dir, target
+
+
+def list_plugin_files(config, relative_path=""):
+    data_dir, target = safe_plugin_browser_path(config, relative_path)
+    plugin_root = (data_dir / "plugins").resolve()
+    config_root = (data_dir / "config").resolve()
+    cwd = target.relative_to(data_dir).as_posix() if target != data_dir else ""
+    folders = []
     files = []
-    roots = [(data_dir, False), (data_dir / "plugins", True), (data_dir / "config", True)]
-    for root, recursive in roots:
-        if not root.exists():
-            continue
-        iterator = root.rglob("*") if recursive else root.glob("*")
-        for path in sorted(iterator):
-            if not path.is_file() or path.suffix.lower() not in EDITABLE_EXTENSIONS:
-                continue
+    truncated = False
+    if not target.exists():
+        return {"cwd": cwd, "folders": [], "files": [], "truncated": False}
+    if not target.is_dir():
+        raise ValueError("Plugin-Konfig-Pfad ist kein Ordner.")
+    for path in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+        try:
+            resolved = path.resolve()
             stat = path.stat()
-            if stat.st_size > 1024 * 1024:
-                continue
-            files.append({"path": path.resolve().relative_to(data_dir).as_posix(), "size": stat.st_size})
-    return files[:500]
+        except OSError:
+            continue
+        try:
+            rel_path = resolved.relative_to(data_dir).as_posix()
+        except ValueError:
+            continue
+        if target == data_dir and path.is_dir() and resolved not in {plugin_root, config_root}:
+            continue
+        if path.is_dir():
+            folders.append({"name": path.name, "path": rel_path})
+        elif path.is_file() and path.suffix.lower() in EDITABLE_EXTENSIONS and stat.st_size <= 1024 * 1024:
+            files.append({"name": path.name, "path": rel_path, "size": stat.st_size})
+        if len(folders) + len(files) >= 500:
+            truncated = True
+            break
+    return {"cwd": cwd, "folders": folders, "files": files, "truncated": truncated}
 
 
 def read_plugin_file(config, relative_path):
@@ -795,7 +824,9 @@ class Handler(BaseHTTPRequestHandler):
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "installed-plugins":
                 self.send_json({"plugins": list_installed_plugins(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugin-files":
-                self.send_json({"files": list_plugin_files(read_server(parts[2]))})
+                query = urllib.parse.parse_qs(parsed.query)
+                rel_path = query.get("path", [""])[0]
+                self.send_json(list_plugin_files(read_server(parts[2]), rel_path))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugin-file":
                 query = urllib.parse.parse_qs(parsed.query)
                 rel_path = query.get("path", [""])[0]
