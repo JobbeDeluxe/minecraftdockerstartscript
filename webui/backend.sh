@@ -70,6 +70,8 @@ RCON_CONTAINER_PORT="${RCON_CONTAINER_PORT:-25575}"
 RCON_COMMAND="${RCON_COMMAND:-}"
 BACKUP_ROOT="${BACKUP_ROOT:-${HOME}/minecraftdocker-backups}"
 BACKUP_FILE="${BACKUP_FILE:-}"
+DOCKER_NETWORK="${DOCKER_NETWORK:-}"
+DOCKER_NETWORK_ALIAS="${DOCKER_NETWORK_ALIAS:-}"
 
 normalize_memory_value() {
     local value="${1:-}"
@@ -168,6 +170,15 @@ container_exists() {
     docker container inspect "$SERVER_NAME" >/dev/null 2>&1
 }
 
+ensure_docker_network() {
+    [[ -z "${DOCKER_NETWORK:-}" ]] && return 0
+    if docker network inspect "$DOCKER_NETWORK" >/dev/null 2>&1; then
+        return 0
+    fi
+    log "Erstelle Docker-Netzwerk ${DOCKER_NETWORK}..."
+    docker network create "$DOCKER_NETWORK" >/dev/null
+}
+
 stop_server() {
     if ! container_exists; then
         log "Container ${SERVER_NAME} ist nicht vorhanden; nichts zu stoppen."
@@ -198,6 +209,8 @@ desired_container_config_hash() {
         printf "RCON_PASSWORD=%s\n" "$RCON_PASSWORD"
         printf "RCON_HOST_PORT=%s\n" "$RCON_HOST_PORT"
         printf "RCON_CONTAINER_PORT=%s\n" "$RCON_CONTAINER_PORT"
+        printf "DOCKER_NETWORK=%s\n" "$DOCKER_NETWORK"
+        printf "DOCKER_NETWORK_ALIAS=%s\n" "$DOCKER_NETWORK_ALIAS"
     } | sha256sum | awk '{print $1}'
 }
 
@@ -385,6 +398,8 @@ apply_container() {
     local config_hash
     config_hash="$(desired_container_config_hash)"
 
+    ensure_docker_network
+
     local docker_args=(-d -p "${HOST_PORT}:${game_port}")
 
     local cleaned_ports="${EXTRA_PORTS//,/ }"
@@ -402,6 +417,10 @@ apply_container() {
         -e TYPE="$TYPE"
         --restart always
     )
+    if [[ -n "${DOCKER_NETWORK:-}" ]]; then
+        docker_args+=(--network "$DOCKER_NETWORK")
+        [[ -n "${DOCKER_NETWORK_ALIAS:-}" ]] && docker_args+=(--network-alias "$DOCKER_NETWORK_ALIAS")
+    fi
 
     if ! is_proxy_type; then
         docker_args+=(-e EULA=TRUE)

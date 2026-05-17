@@ -85,7 +85,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.11
+v1.0.12
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -106,6 +106,25 @@ VELOCITY, BUNGEECORD, WATERFALL
 ```
 
 Bei Proxy-Typen setzt die WebUI automatisch das passende Image, mountet den Datenordner nach `/server` und nutzt die passenden internen Ports. Fuer Velocity liest die WebUI den internen Port aus `velocity.toml` (`bind`) und mappt den Host-Port darauf, zum Beispiel `25565:25577`, wenn Velocity intern auf `25577` lauscht. Fuer Velocity koennen `velocity.toml`, `forwarding.secret` und weitere Textdateien ueber den Datei-/Konfig-Editor bearbeitet werden.
+
+## Velocity-Netzwerk
+
+Profile koennen ueber `Netzwerk-Gruppe` zu einem kleinen Velocity-Verbund zusammengefasst werden.
+Ein Velocity-Profil wird als `Proxy` genutzt, Paper/Purpur/Folia oder andere Java-Server als
+`Backend`. `Netzwerk-Alias` ist der Name fuer Velocity-Befehle wie `/server lobby`; `Default-Ziel`
+auf dem Velocity-Profil bestimmt den ersten Zielserver.
+
+`Netzwerk anwenden` aktualisiert automatisch:
+
+- `velocity.toml` mit `[servers]`, `try`, `player-info-forwarding-mode = "modern"` und `forwarding-secret-file`
+- `forwarding.secret` im Velocity-Datenordner
+- `server.properties` der Backends mit `online-mode=false` und `enforce-secure-profile=false`
+- `config/paper-global.yml` fuer Paper/Purpur/Folia mit aktiviertem Velocity-Forwarding
+- Docker-Netzwerkdaten in den Profilen, damit die Container sich untereinander per Containername erreichen
+
+Danach die betroffenen Profile per `Anwenden` oder `Restart` neu erstellen, damit Docker-Netzwerk
+und neue Konfigdateien aktiv sind. Geyser/Floodgate oder weitere Plugin-Spezialkonfigurationen
+bleiben aktuell noch manuelle Feineinstellung.
 
 ## Deaktivierte Profile
 
@@ -230,4 +249,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.11` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.12` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.11`
+Version: `v1.0.12`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -52,6 +52,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Lokale Serverdaten loeschen, ohne Profil oder zentrale Backups zu entfernen
 - Datenverzeichnis nachtraeglich verschieben und das Profil automatisch anpassen
+- Velocity-Netzwerkgruppen fuer Proxy und Backend-Server konfigurieren
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 
 ## Deaktivierte Profile
@@ -147,6 +148,23 @@ Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Upda
 `Lokale Konfigs laden` aktualisiert die Dateiauswahl fuer Textdateien unter `plugins/`, `config/` und im Datenordner. Beim Auswaehlen einer Datei wird ihr Inhalt automatisch geladen. `Inhalt neu laden` laedt die aktuell gewaehlte Datei erneut.
 Die Plugin-Konfig nutzt Ordnernavigation: Ordner koennen direkt geoeffnet werden, `Zurueck`
 geht eine Ebene hoch, und es werden nur Konfigdateien im aktuellen Ordner angezeigt.
+
+## Velocity-Netzwerkgruppen
+
+Mehrere Profile koennen dieselbe `Netzwerk-Gruppe` bekommen, zum Beispiel `main`. Das Velocity-Profil
+ist die Rolle `Proxy`, die Java-Server sind `Backend`. Der `Netzwerk-Alias` ist der Name fuer
+Velocity-Befehle wie `/server lobby`; `Default-Ziel` auf dem Velocity-Profil bestimmt, wohin neue
+Spieler zuerst geschickt werden.
+
+`Netzwerk anwenden` schreibt die Standard-Konfiguration fuer einen Velocity-Verbund:
+
+- `velocity.toml` mit Backend-Liste, `try`, modernem Player-Forwarding und `forwarding.secret`
+- `server.properties` der Backends mit deaktiviertem `online-mode`
+- `config/paper-global.yml` fuer Paper/Purpur/Folia mit Velocity-Forwarding und gemeinsamem Secret
+- Docker-Netzwerkdaten in den Profilen, damit die Container sich per Containername erreichen
+
+Danach die Gruppe per `Anwenden` oder `Restart` neu erstellen. Geyser/Floodgate- oder andere
+Plugin-Spezialkonfigurationen werden noch nicht automatisch angepasst.
 
 ## RCON und Ports
 

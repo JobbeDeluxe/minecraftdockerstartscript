@@ -7,12 +7,13 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.11</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.12</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
 <form id="editor"></form>
 <div class="box"><h2>Portpruefung</h2><div id="warnings" class="warnings muted">Noch keine Pruefung.</div></div>
+<div class="box"><h2>Velocity-Netzwerk</h2><pre id="networkSummary" class="small-output"></pre><div class="actions"><button id="applyNetwork" class="warn" type="button">Netzwerk anwenden</button></div></div>
 <div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button id="profileToggle" data-action="disable">Deaktivieren</button><button class="warn" data-action="backup">Backup</button><button class="warn" data-action="delete-data">Lokale Daten loeschen</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
 <iframe id="mapFrame" class="map-frame" hidden title="BlueMap"></iframe>
 <div class="box"><h2>Spieler <span id="playerSummary" class="muted"></span></h2><div class="actions"><select id="players"></select><input id="playerName" placeholder="Spielername manuell"><button id="refreshPlayers" type="button">Spieler laden</button></div><div class="actions"><input id="targetPlayer" placeholder="Zielspieler fuer TP"><button data-rcon-shortcut="tp" type="button">TP zu Spieler</button><input id="giveItem" placeholder="minecraft:diamond"><input id="giveAmount" type="number" min="1" value="1"><button data-rcon-shortcut="give" type="button">Give</button><button data-rcon-shortcut="kick" type="button">Kick</button><button data-rcon-shortcut="ban" class="warn" type="button">Ban</button><button data-rcon-shortcut="pardon" type="button">Pardon</button></div></div>
@@ -38,6 +39,16 @@ Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruef
 Datenverzeichnis: Host-Ordner, der bei Minecraft-Servern als /data und bei Proxy-Servern als /server gemountet wird. Wenn der Pfad spaeter korrigiert werden soll, neuen Pfad eintragen und Daten verschieben nutzen.
 Typ: normale Minecraft-Typen nutzen itzg/minecraft-server. BungeeCord, Waterfall und Velocity nutzen automatisch itzg/mc-proxy.
 Docker Image: bei leerem oder Standardwert setzt die WebUI das passende Image automatisch.
+Netzwerk-Gruppe: gleicher Gruppenname verbindet einen Velocity-Proxy mit seinen Backend-Servern.
+Netzwerk-Rolle: Auto erkennt Velocity als Proxy und normale Java-Server als Backend. Bei Sonderfaellen Proxy oder Backend manuell setzen.
+Netzwerk-Alias: Name fuer Velocity-Befehle wie /server lobby. Leer nutzt die Profil-ID.
+Default-Ziel: nur beim Velocity-Profil relevant; erster Zielserver fuer neue Spieler, z. B. lobby.
+
+Velocity-Netzwerk
+Alle Server derselben Netzwerk-Gruppe werden als Gruppe betrachtet. Es muss genau einen Velocity-Proxy und mindestens einen Backend-Server geben.
+Netzwerk anwenden schreibt oder aktualisiert velocity.toml, forwarding.secret, server.properties und bei Paper/Purpur/Folia config/paper-global.yml. Ausserdem bekommen die Profile Docker-Netzwerkdaten, damit die Container sich per Containername im gemeinsamen Docker-Netzwerk erreichen.
+Danach die betroffenen Server per Anwenden oder Restart neu erstellen, damit Docker-Netzwerk und Konfigdateien aktiv sind.
+Der Assistent setzt das moderne Velocity-Forwarding und deaktiviert online-mode auf den Backend-Servern. Bedrock/Geyser-Chat oder Spezial-Plugin-Konfigs bleiben vorerst manuelle Feineinstellung.
 
 Ports und RCON
 Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft nutzt intern 25565. Velocity nutzt den bind-Port aus velocity.toml, sonst 25565. BungeeCord/Waterfall nutzen intern 25577.
@@ -86,6 +97,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.11"></script>
+<script src="/static/app.js?v=1.0.12"></script>
 </body>
 </html>

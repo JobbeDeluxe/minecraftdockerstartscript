@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import shlex
+import secrets
 import socket
 import subprocess
 import tempfile
@@ -18,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.11"
+APP_VERSION = "v1.0.12"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -51,6 +52,12 @@ DEFAULT_SERVER = {
     "rcon_host_port": "25575",
     "rcon_container_port": "25575",
     "backup_root": str(Path.home() / "minecraftdocker-backups"),
+    "network_group": "",
+    "network_role": "",
+    "network_alias": "",
+    "network_default": "",
+    "docker_network": "",
+    "docker_network_alias": "",
 }
 
 def ensure_state():
@@ -122,6 +129,26 @@ def write_server(data):
     server_path(server_id).write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
     merged["warnings"] = warnings
     return merged
+
+
+def safe_slug(value, fallback="server"):
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value or "").strip()).strip("-._").lower()
+    return slug or fallback
+
+
+def is_proxy_type_value(value):
+    return str(value or "").upper() in {"VELOCITY", "BUNGEECORD", "WATERFALL"}
+
+
+def server_network_role(config):
+    role = str(config.get("network_role") or "").strip().lower()
+    if role in {"proxy", "backend"}:
+        return role
+    return "proxy" if str(config.get("type") or "").upper() == "VELOCITY" else "backend"
+
+
+def server_network_alias(config):
+    return safe_slug(config.get("network_alias") or config.get("id") or config.get("name"), "server")
 
 
 def set_server_disabled(server_id, disabled):
@@ -624,6 +651,217 @@ def write_server_properties(config, content):
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
 
 
+def set_properties_values(path, values):
+    lines = []
+    seen = set()
+    if path.exists():
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    output = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in values:
+                if key not in seen:
+                    output.append(f"{key}={values[key]}")
+                    seen.add(key)
+                continue
+        output.append(line)
+    for key, value in values.items():
+        if key not in seen:
+            output.append(f"{key}={value}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(output).rstrip() + "\n", encoding="utf-8")
+
+
+def set_toml_top_value(text, key, literal):
+    lines = text.splitlines()
+    output = []
+    replaced = False
+    in_table = False
+    insert_at = len(lines)
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]") and not stripped.startswith("[["):
+            if insert_at == len(lines):
+                insert_at = idx
+            in_table = True
+        if not in_table and re.match(rf"^\s*{re.escape(key)}\s*=", line):
+            output.append(f"{key} = {literal}")
+            replaced = True
+        else:
+            output.append(line)
+    if not replaced:
+        output.insert(insert_at, f"{key} = {literal}")
+    return "\n".join(output).rstrip() + "\n"
+
+
+def replace_toml_table(text, table, body_lines):
+    lines = text.splitlines()
+    output = []
+    idx = 0
+    replaced = False
+    header = f"[{table}]"
+    while idx < len(lines):
+        if lines[idx].strip() == header:
+            output.append(header)
+            output.extend(body_lines)
+            replaced = True
+            idx += 1
+            while idx < len(lines) and not (lines[idx].strip().startswith("[") and lines[idx].strip().endswith("]")):
+                idx += 1
+            continue
+        output.append(lines[idx])
+        idx += 1
+    if not replaced:
+        if output and output[-1].strip():
+            output.append("")
+        output.append(header)
+        output.extend(body_lines)
+    return "\n".join(output).rstrip() + "\n"
+
+
+def toml_quote(value):
+    return json.dumps(str(value))
+
+
+def replace_yaml_top_section(text, section, body_lines):
+    lines = text.splitlines()
+    output = []
+    idx = 0
+    replaced = False
+    while idx < len(lines):
+        line = lines[idx]
+        if re.match(rf"^{re.escape(section)}:\s*$", line):
+            output.extend(body_lines)
+            replaced = True
+            idx += 1
+            while idx < len(lines):
+                stripped = lines[idx].strip()
+                if stripped and not lines[idx].startswith((" ", "\t", "#")):
+                    break
+                idx += 1
+            continue
+        output.append(line)
+        idx += 1
+    if not replaced:
+        if output and output[-1].strip():
+            output.append("")
+        output.extend(body_lines)
+    return "\n".join(output).rstrip() + "\n"
+
+
+def configure_paper_global(data_dir, secret, proxy_online_mode=True):
+    path = data_dir / "config" / "paper-global.yml"
+    text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    block = [
+        "proxies:",
+        "  bungee-cord:",
+        "    online-mode: true",
+        "  velocity:",
+        "    enabled: true",
+        f"    online-mode: {'true' if proxy_online_mode else 'false'}",
+        f"    secret: {json.dumps(secret)}",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(replace_yaml_top_section(text, "proxies", block), encoding="utf-8")
+
+
+def configure_velocity_network(seed_server_id):
+    seed = read_server(seed_server_id)
+    group = str(seed.get("network_group") or "").strip()
+    if not group:
+        raise ValueError("Bitte zuerst eine Netzwerk-Gruppe im Profil eintragen.")
+    all_servers = [read_server(path.stem) for path in sorted(SERVER_DIR.glob("*.json"))]
+    members = [server for server in all_servers if str(server.get("network_group") or "").strip() == group and not is_disabled(server)]
+    if not members:
+        raise ValueError(f"Keine aktiven Server in Netzwerk-Gruppe {group} gefunden.")
+    proxy_candidates = [server for server in members if server_network_role(server) == "proxy" or str(server.get("type") or "").upper() == "VELOCITY"]
+    if len(proxy_candidates) != 1:
+        raise ValueError("Bitte genau einen Velocity-Server in dieser Gruppe als Netzwerk-Rolle Proxy markieren.")
+    proxy = proxy_candidates[0]
+    if str(proxy.get("type") or "").upper() != "VELOCITY":
+        raise ValueError("Der Netzwerk-Assistent unterstuetzt aktuell Velocity als Proxy.")
+    backends = [server for server in members if server.get("id") != proxy.get("id") and server_network_role(server) == "backend" and not is_proxy_type_value(server.get("type"))]
+    if not backends:
+        raise ValueError("Keine Backend-Server in dieser Gruppe gefunden.")
+
+    docker_network = safe_slug(f"mcnet-{group}", "mcnet")
+    proxy_dir = Path(proxy.get("data_dir", "")).expanduser()
+    proxy_dir.mkdir(parents=True, exist_ok=True)
+    secret_path = proxy_dir / "forwarding.secret"
+    secret = secret_path.read_text(encoding="utf-8", errors="replace").strip() if secret_path.exists() else ""
+    if not secret:
+        secret = secrets.token_urlsafe(32)
+        secret_path.write_text(secret + "\n", encoding="utf-8")
+
+    backend_infos = []
+    seen_aliases = {}
+    for server in backends:
+        alias = server_network_alias(server)
+        if alias in seen_aliases:
+            raise ValueError(f"Netzwerk-Alias {alias} ist doppelt vergeben: {seen_aliases[alias]} und {server.get('name') or server.get('id')}.")
+        seen_aliases[alias] = server.get("name") or server.get("id")
+        address = f"{server.get('container_name') or 'mc-' + server.get('id', alias)}:25565"
+        backend_infos.append((alias, address, server))
+    default_alias = safe_slug(proxy.get("network_default") or "", "")
+    aliases = [alias for alias, _, _ in backend_infos]
+    if default_alias not in aliases:
+        default_alias = next((alias for alias in aliases if alias == "lobby" or "lobby" in alias), aliases[0])
+
+    velocity_path = proxy_dir / "velocity.toml"
+    velocity_text = velocity_path.read_text(encoding="utf-8", errors="replace") if velocity_path.exists() else ""
+    if not velocity_text.strip():
+        velocity_text = 'bind = "0.0.0.0:25577"\n'
+    velocity_text = set_toml_top_value(velocity_text, "online-mode", "true")
+    velocity_text = set_toml_top_value(velocity_text, "player-info-forwarding-mode", toml_quote("modern"))
+    velocity_text = set_toml_top_value(velocity_text, "forwarding-secret-file", toml_quote("forwarding.secret"))
+    server_lines = [f"{alias} = {toml_quote(address)}" for alias, address, _ in backend_infos]
+    server_lines.append(f"try = [{toml_quote(default_alias)}]")
+    velocity_path.write_text(replace_toml_table(velocity_text, "servers", server_lines), encoding="utf-8")
+
+    details = [
+        f"Netzwerk-Gruppe: {group}",
+        f"Docker-Netzwerk: {docker_network}",
+        f"Velocity: {proxy.get('name') or proxy.get('id')} ({proxy.get('container_name')})",
+        f"Default-Ziel: {default_alias}",
+        "Velocity-Konfig aktualisiert: velocity.toml, forwarding.secret",
+    ]
+
+    for alias, address, server in backend_infos:
+        data_dir = Path(server.get("data_dir", "")).expanduser()
+        set_properties_values(data_dir / "server.properties", {
+            "online-mode": "false",
+            "enforce-secure-profile": "false",
+        })
+        if str(server.get("type") or "").upper() in {"PAPER", "PURPUR", "FOLIA"}:
+            configure_paper_global(data_dir, secret, True)
+            details.append(f"Backend {alias}: {address}, server.properties und config/paper-global.yml aktualisiert.")
+        else:
+            details.append(f"Backend {alias}: {address}, server.properties aktualisiert. Paper-Forwarding-Konfig fuer Typ {server.get('type')} nicht automatisch geschrieben.")
+        updated = server.copy()
+        updated.update({
+            "network_group": group,
+            "network_role": "backend",
+            "network_alias": alias,
+            "docker_network": docker_network,
+            "docker_network_alias": alias,
+        })
+        write_server(updated)
+
+    proxy_updated = proxy.copy()
+    proxy_updated.update({
+        "network_group": group,
+        "network_role": "proxy",
+        "network_default": default_alias,
+        "docker_network": docker_network,
+        "docker_network_alias": server_network_alias(proxy),
+    })
+    write_server(proxy_updated)
+    details.append("Profile wurden mit Docker-Netzwerkdaten aktualisiert. Danach Gruppe per Anwenden/Restart neu erstellen, damit Container im Netzwerk landen und Configs geladen werden.")
+    return {"ok": True, "message": "Velocity-Netzwerk konfiguriert.", "details": details}
+
+
 def read_action_log(config, lines=200):
     path = Path(config.get("data_dir", "")) / "update_log.txt"
     if not path.exists():
@@ -655,6 +893,8 @@ def config_env(config):
         "RCON_COMMAND": config.get("rcon_command", ""),
         "BACKUP_ROOT": config.get("backup_root", ""),
         "BACKUP_FILE": config.get("backup_file", ""),
+        "DOCKER_NETWORK": config.get("docker_network", ""),
+        "DOCKER_NETWORK_ALIAS": config.get("docker_network_alias", ""),
     }
 
 
@@ -859,6 +1099,8 @@ class Handler(BaseHTTPRequestHandler):
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "move-data-dir":
                 body = self.read_json()
                 self.send_json(move_data_dir(parts[2], body.get("target", ""), body.get("profile")))
+            elif len(parts) == 5 and parts[:2] == ["api", "servers"] and parts[3:] == ["network", "apply"]:
+                self.send_json(configure_velocity_network(parts[2]))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugins":
                 write_plugins(read_server(parts[2]), self.read_json().get("content", ""))
                 self.send_json({"message": "plugins.txt gespeichert."})
