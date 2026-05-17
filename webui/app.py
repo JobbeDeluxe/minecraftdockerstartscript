@@ -19,7 +19,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.14"
+ASSET_DIR = ROOT / "docs" / "assets"
+APP_VERSION = "v1.0.15"
+PUBLIC_ASSETS = {
+    "minecraft-docker-webui-spigot-icon-96.png",
+    "minecraft-docker-webui-icon-128.png",
+}
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -1067,6 +1072,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_file(STATIC_DIR / "style.css", "text/css; charset=utf-8")
             elif parsed.path == "/static/app.js":
                 self.send_file(STATIC_DIR / "app.js", "text/javascript; charset=utf-8")
+            elif len(parts) == 2 and parts[0] == "assets" and parts[1] in PUBLIC_ASSETS:
+                self.send_file(ASSET_DIR / parts[1], "image/png")
             elif parts == ["api", "version"]:
                 self.send_json({"version": APP_VERSION})
             elif parts == ["api", "servers"]:

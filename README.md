@@ -85,10 +85,20 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.14
+v1.0.15
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
+
+## Icons und Assets
+
+Die WebUI nutzt das Spigot/WebUI-PNG als sichtbares Header-Icon und als Browser-Favicon:
+
+- `docs/assets/minecraft-docker-webui-spigot-icon-96.png`
+- `docs/assets/minecraft-docker-webui-icon-128.png`
+
+Die Dateien werden von der WebUI unter `/assets/...` ausgeliefert und koennen auch fuer README,
+Release-Notizen oder Desktop-/Homescreen-Verknuepfungen genutzt werden.
 
 ## Server und Docker
 
@@ -224,7 +234,7 @@ Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner
 
 ## Hilfe im WebUI
 
-Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap und den Unterschied zwischen `Speichern` und `Anwenden`.
+Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap, Datei-/Konfig-Bearbeitung, das eingebundene Icon und den Unterschied zwischen `Speichern` und `Anwenden`.
 
 ## CLI-Modus
 
@@ -251,4 +261,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.14` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.15` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

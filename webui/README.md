@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.14`
+Version: `v1.0.15`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -17,6 +17,16 @@ Live-Beispiel einer laufenden WebUI-Instanz:
 Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 
 ![WebUI Hilfe](docs/images/webui-help-live.png)
+
+## Icons
+
+Die WebUI bindet das Spigot/WebUI-Icon im Header, als Favicon und als App-Icon ein. Die PNG-Dateien
+liegen im Repository unter:
+
+- `../docs/assets/minecraft-docker-webui-spigot-icon-96.png`
+- `../docs/assets/minecraft-docker-webui-icon-128.png`
+
+Ausgeliefert werden sie durch die WebUI unter `/assets/...`.
 
 ## Start
 

@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Minecraft Docker WebUI</title>
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/minecraft-docker-webui-spigot-icon-96.png">
+<link rel="apple-touch-icon" sizes="128x128" href="/assets/minecraft-docker-webui-icon-128.png">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.14</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><h1>Minecraft Docker WebUI <span class="version">v1.0.15</span></h1></div><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -25,6 +27,7 @@
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
+Das Spigot/WebUI-Icon ist als Header-Icon, Browser-Favicon und App-Icon eingebunden. Die PNG-Dateien liegen im Repository unter docs/assets.
 Stop haelt den Container an und loescht ihn danach. Profil und Daten bleiben erhalten; Start oder Anwenden erstellt den Container neu.
 Deaktivieren entfernt nur den Docker-Container und markiert das Profil als deaktiviert. Profil und Daten bleiben erhalten, der Host-Port wird frei.
 Deaktivierte Profile werden links ausgegraut und als deaktiviert angezeigt. Ihre Ports blockieren andere Profile nicht mehr.
@@ -97,6 +100,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.14"></script>
+<script src="/static/app.js?v=1.0.15"></script>
 </body>
 </html>
