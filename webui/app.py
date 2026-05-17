@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.13"
+APP_VERSION = "v1.0.14"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"

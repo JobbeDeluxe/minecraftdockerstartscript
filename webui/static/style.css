@@ -46,8 +46,8 @@ textarea{min-height:180px;font-family:ui-monospace,SFMono-Regular,Consolas,monos
 .file-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
 .file-row button{min-height:32px}
 .file-open{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-entry.config-file{background:#22313a;border-color:#456273;color:#f2fbff}
-.file-entry.config-file:hover{border-color:#6f9ab0;background:#293c47}
+.file-entry.config-file{background:#2f4b59;border-color:#7fb1c7;color:#ffffff}
+.file-entry.config-file:hover{border-color:#a3cde0;background:#3a5d6d}
 .file-pick.selected,.file-entry.selected{border-color:var(--accent);background:#24583b}
 .file-empty{min-height:36px;display:flex;align-items:center}
 #fileEditorPath{flex:1 1 320px}

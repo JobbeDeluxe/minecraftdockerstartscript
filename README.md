@@ -85,7 +85,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.13
+v1.0.14
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -251,4 +251,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.13` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.14` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
