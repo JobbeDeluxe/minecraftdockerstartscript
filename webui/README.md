@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.9`
+Version: `v1.0.10`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -51,6 +51,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - BlueMap ueber die WebUI unter `/map/<server-id>/` proxien und einbetten
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Lokale Serverdaten loeschen, ohne Profil oder zentrale Backups zu entfernen
+- Datenverzeichnis nachtraeglich verschieben und das Profil automatisch anpassen
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 
 ## Deaktivierte Profile
@@ -65,6 +66,17 @@ du ein deaktiviertes Profil auswaehlst, wechselt der Button von `Deaktivieren` z
 `Aktivieren` startet keinen Container, sondern nimmt das Profil nur wieder in Status- und
 Portpruefung auf. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktiviertes Profil nach
 erfolgreicher Aktion ebenfalls automatisch wieder.
+
+## Datenverzeichnis
+
+Wenn ein Profil den falschen Datenordner nutzt, kann der neue Pfad im Feld `Datenverzeichnis`
+eingetragen und mit `Daten verschieben` uebernommen werden. Die WebUI entfernt dafuer den
+Container, verschiebt den alten Datenordner an den neuen Pfad und aktualisiert das Profil.
+Zentrale Backups bleiben dabei unveraendert.
+
+Der Datei-Browser trennt Ordner und Dateien. Ein Klick auf den Ordnernamen oeffnet den Ordner,
+`Zurueck` geht eine Ebene nach oben, und `Auswahl` markiert einen Ordner fuer Umbenennen oder
+Loeschen.
 
 ## Backend-Modus
 

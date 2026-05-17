@@ -22,6 +22,7 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Docker-Aktionen: Anwenden, Start, Stop mit Container-Entfernung, Restart und Backup
 - Start erstellt bei neuen Profilen automatisch einen fehlenden Container
 - Lokale Daten eines Profils loeschen, ohne Profil oder zentrale Backups zu entfernen
+- Datenverzeichnis eines Profils nachtraeglich verschieben und das Profil automatisch anpassen
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Portpruefung gegen andere Profile und laufende Docker-Container
 - Deaktivierte Profile werden ausgegraut, als `deaktiviert` markiert und geben ihre Ports frei
@@ -39,7 +40,7 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Installierte Plugins anzeigen und aus dem Plugin-Ordner entfernen
 - Plugin-Konfigdateien direkt bearbeiten, zum Beispiel unter `plugins/`, `config/` oder im Datenordner
 - Velocity-Dateien wie `velocity.toml` und `forwarding.secret` editieren
-- Datei-Manager fuer Serverdaten: Ordner laden, hoch navigieren, Ordner erstellen, umbenennen und loeschen
+- Datei-Manager fuer Serverdaten: Ordner per Klick oeffnen, zurueck navigieren, Ordner erstellen, umbenennen und loeschen
 - ZIP-Upload zum Importieren oder Austauschen von Welten und Daten
 - Zentrale Backups mit Restore in ein bestehendes Profil
 - Import aus `.tar.gz`/`.tgz` Backups als neues Serverprofil
@@ -83,7 +84,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.9
+v1.0.10
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -187,6 +188,8 @@ Bei Plugin-Konfigdateien aktualisiert `Lokale Konfigs laden` die Dateiauswahl. S
 
 Der ZIP-Upload ist fuer Welt-Importe oder Datenaustausch gedacht. Entpackt wird in den aktuell ausgewaehlten Ordner innerhalb des Server-Datenverzeichnisses.
 
+Wenn das Datenverzeichnis nachtraeglich korrigiert werden muss, kann der neue Pfad im Profil eingetragen und mit `Daten verschieben` uebernommen werden. Die WebUI entfernt dabei den Container, verschiebt den alten Datenordner an den neuen Pfad und aktualisiert das Profil. Der Datei-Browser trennt Ordner und Dateien; ein Klick auf einen Ordner oeffnet ihn, `Zurueck` geht eine Ebene hoch.
+
 ## Backups und Import
 
 Backups werden zentral abgelegt und enthalten den Server-/Containernamen im Dateinamen. Dadurch kann ein alter Server geloescht und spaeter wieder als neues Profil importiert werden.
@@ -226,4 +229,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.9` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.10` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

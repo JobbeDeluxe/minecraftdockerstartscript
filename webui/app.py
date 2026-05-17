@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.9"
+APP_VERSION = "v1.0.10"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -146,14 +146,22 @@ def remove_container(container_name):
     raise RuntimeError(f"Container {name} konnte nicht geloescht werden: {stderr or stdout}")
 
 
+def resolve_data_dir_path(raw):
+    raw = str(raw or "").strip()
+    if not raw:
+        raise ValueError("Kein Datenordner im Profil gesetzt.")
+    target = Path(raw).expanduser().resolve()
+    roots = [STATE_DIR.resolve(), ROOT.resolve()]
+    if target.parent == target or len(target.parts) < 3 or any(target == root or target in root.parents or root in target.parents for root in roots):
+        raise ValueError(f"Datenordner ist aus Sicherheitsgruenden nicht erlaubt: {target}")
+    return target
+
+
 def delete_data_dir(config):
     raw = str(config.get("data_dir") or "").strip()
     if not raw:
         return ["Kein Datenordner im Profil gesetzt."]
-    target = Path(raw).expanduser().resolve()
-    roots = [STATE_DIR.resolve(), ROOT.resolve()]
-    if target.parent == target or len(target.parts) < 3 or any(target == root or target in root.parents or root in target.parents for root in roots):
-        raise ValueError(f"Datenordner wird aus Sicherheitsgruenden nicht geloescht: {target}")
+    target = resolve_data_dir_path(raw)
     if not target.exists():
         return [f"Datenordner war nicht vorhanden: {target}"]
     if not target.is_dir():
@@ -182,6 +190,41 @@ def delete_local_data(config):
     details.extend(delete_data_dir(config))
     details.append("Profil bleibt erhalten. Start oder Anwenden legt Container und Daten neu an.")
     return {"ok": True, "code": 0, "stdout": "\n".join(details), "stderr": ""}
+
+
+def move_data_dir(server_id, target_raw, profile_update=None):
+    config = read_server(server_id)
+    source = resolve_data_dir_path(config.get("data_dir"))
+    target = resolve_data_dir_path(target_raw)
+    if source == target:
+        return {"message": "Datenverzeichnis ist bereits auf diesen Pfad gesetzt.", "details": [], "server": config}
+    if source in target.parents:
+        raise ValueError("Der neue Datenordner darf nicht innerhalb des alten Datenordners liegen.")
+    details = []
+    details.extend(remove_container(config.get("container_name")))
+    if source.exists():
+        if not source.is_dir():
+            raise ValueError(f"Alter Datenpfad ist kein Ordner: {source}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if not target.is_dir():
+                raise ValueError(f"Zielpfad ist kein Ordner: {target}")
+            if any(target.iterdir()):
+                raise ValueError(f"Zielordner ist nicht leer: {target}")
+            target.rmdir()
+        shutil.move(str(source), str(target))
+        details.append(f"Datenordner verschoben: {source} -> {target}")
+    else:
+        target.mkdir(parents=True, exist_ok=True)
+        details.append(f"Alter Datenordner war nicht vorhanden; neuer Datenordner erstellt: {target}")
+    updated = config.copy()
+    if isinstance(profile_update, dict):
+        updated.update(profile_update)
+    updated["id"] = server_id
+    updated["data_dir"] = str(target)
+    saved = write_server(updated)
+    details.append("Profil wurde auf den neuen Datenordner aktualisiert.")
+    return {"message": "Datenverzeichnis verschoben.", "details": details, "server": saved}
 
 
 def list_servers():
@@ -782,6 +825,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(write_server(self.read_json()))
             elif parts == ["api", "ports", "check"]:
                 self.send_json({"warnings": port_warnings(self.read_json())})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "move-data-dir":
+                body = self.read_json()
+                self.send_json(move_data_dir(parts[2], body.get("target", ""), body.get("profile")))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugins":
                 write_plugins(read_server(parts[2]), self.read_json().get("content", ""))
                 self.send_json({"message": "plugins.txt gespeichert."})

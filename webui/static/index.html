@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><h1>Minecraft Docker WebUI <span class="version">v1.0.9</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><h1>Minecraft Docker WebUI <span class="version">v1.0.10</span></h1><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -21,7 +21,7 @@
 <div class="box"><h2>server.properties <span id="propertiesDirty" class="warnings"></span></h2><textarea id="serverProperties" spellcheck="false"></textarea><div class="actions"><button id="saveProperties" type="button">server.properties speichern</button><button id="reloadProperties" type="button">Neu laden</button></div></div>
 <div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button><button id="refreshInstalledPlugins" type="button">Installierte Plugins laden</button><select id="installedPluginSelect"></select><button id="deleteInstalledPlugin" class="warn" type="button">Installiertes Plugin loeschen</button></div><pre id="installedPlugins" class="small-output"></pre></div>
 <div class="box"><h2>Plugin-Konfig <span id="pluginFileDirty" class="warnings"></span></h2><div class="actions"><select id="pluginFiles"></select><button id="refreshPluginFiles" type="button">Lokale Konfigs laden</button><button id="loadPluginFile" type="button">Inhalt neu laden</button><button id="savePluginFile" type="button">Datei speichern</button></div><textarea id="pluginFileContent" spellcheck="false" placeholder="Plugin-Konfig aus DATA_DIR/plugins oder DATA_DIR/config laden"></textarea></div>
-<div class="box"><h2>Dateien</h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Hoch</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="actions"><select id="fileEntries"></select><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div><pre id="fileList" class="small-output"></pre></div>
+<div class="box"><h2>Dateien</h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Zurueck</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="file-browser"><section class="file-pane"><h3>Ordner</h3><div id="fileFolders" class="file-list"></div></section><section class="file-pane"><h3>Dateien</h3><select id="fileEntries" size="8"></select><pre id="fileList" class="small-output"></pre></section></div><div class="actions"><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
 <dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
@@ -35,7 +35,7 @@ Profilfelder
 ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
 Name: Anzeigename in der WebUI.
 Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruefungen erkennt.
-Datenverzeichnis: Host-Ordner, der bei Minecraft-Servern als /data und bei Proxy-Servern als /server gemountet wird.
+Datenverzeichnis: Host-Ordner, der bei Minecraft-Servern als /data und bei Proxy-Servern als /server gemountet wird. Wenn der Pfad spaeter korrigiert werden soll, neuen Pfad eintragen und Daten verschieben nutzen.
 Typ: normale Minecraft-Typen nutzen itzg/minecraft-server. BungeeCord, Waterfall und Velocity nutzen automatisch itzg/mc-proxy.
 Docker Image: bei leerem oder Standardwert setzt die WebUI das passende Image automatisch.
 
@@ -61,6 +61,7 @@ Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Date
 Waehrend ein Backup laeuft, zeigt die WebUI den Fortschritt aus dem Aktionslog an, inklusive aktueller Archivgroesse und verstrichener Zeit.
 Lokale Daten loeschen entfernt Container und Datenordner, laesst aber Profil und zentrale Backups stehen. Deaktivieren entfernt nur den Container und markiert das Profil als deaktiviert. Server loeschen entfernt Profil, Docker-Container und Datenordner.
 Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
+Im Datei-Browser oeffnet ein Klick auf den Ordnernamen den Ordner. Auswahl markiert einen Ordner fuer Umbenennen oder Loeschen. Zurueck geht eine Ebene nach oben.
 
 Plugins
 Eine Zeile in plugins.txt besteht aus Name und Quelle. # deaktiviert eine Zeile.
@@ -85,6 +86,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.9"></script>
+<script src="/static/app.js?v=1.0.10"></script>
 </body>
 </html>
