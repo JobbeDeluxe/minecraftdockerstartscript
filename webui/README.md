@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.12`
+Version: `v1.0.13`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -143,11 +143,16 @@ kein `git`, aber `curl`/`wget` und entweder `mvn` oder Docker, damit der Maven-C
 SpigotMC-/BukkitDev-Projektseiten sind in der Regel keine direkten JAR-Downloads. Die WebUI lehnt heruntergeladene
 Dateien ab, wenn sie keine echte JAR/ZIP-Datei sind, und beendet das Plugin-Update dann mit Fehlercode.
 
-## Plugin-Konfig
+## Dateien und Konfigs
 
-`Lokale Konfigs laden` aktualisiert die Dateiauswahl fuer Textdateien unter `plugins/`, `config/` und im Datenordner. Beim Auswaehlen einer Datei wird ihr Inhalt automatisch geladen. `Inhalt neu laden` laedt die aktuell gewaehlte Datei erneut.
-Die Plugin-Konfig nutzt Ordnernavigation: Ordner koennen direkt geoeffnet werden, `Zurueck`
-geht eine Ebene hoch, und es werden nur Konfigdateien im aktuellen Ordner angezeigt.
+Der Datei-Bereich ersetzt den separaten Plugin-Konfig-Bereich. Ordner stehen links, Dateien rechts.
+Ein Klick auf einen Ordner oeffnet ihn, `Zurueck` geht eine Ebene hoch. Text-Konfigdateien wie
+`velocity.toml`, `forwarding.secret`, `server.properties`, `.yml`, `.json`, `.conf` oder `.txt`
+werden heller markiert und beim Anklicken direkt in den Editor darunter geladen.
+
+`Inhalt neu laden` laedt die aktuell geoeffnete Datei erneut. `Datei speichern` schreibt die
+Aenderungen zurueck. Nicht editierbare Dateien wie `.jar` oder grosse Weltdaten werden nur fuer
+Umbenennen oder Loeschen ausgewaehlt.
 
 ## Velocity-Netzwerkgruppen
 

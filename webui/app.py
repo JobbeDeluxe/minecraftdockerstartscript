@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
-APP_VERSION = "v1.0.12"
+APP_VERSION = "v1.0.13"
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
@@ -84,7 +84,7 @@ def read_server(server_id):
     if not path.exists():
         raise FileNotFoundError(server_id)
     data = DEFAULT_SERVER.copy()
-    data.update(json.loads(path.read_text(encoding="utf-8")))
+    data.update(json.loads(path.read_text(encoding="utf-8-sig")))
     return data
 
 
@@ -113,7 +113,7 @@ def write_server(data):
     path = server_path(server_id)
     if path.exists():
         try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
+            existing = json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             existing = {}
     merged = DEFAULT_SERVER.copy()
@@ -260,7 +260,7 @@ def list_servers():
     for path in sorted(SERVER_DIR.glob("*.json")):
         try:
             data = DEFAULT_SERVER.copy()
-            data.update(json.loads(path.read_text(encoding="utf-8")))
+            data.update(json.loads(path.read_text(encoding="utf-8-sig")))
             out.append(data)
         except json.JSONDecodeError:
             pass
@@ -502,6 +502,14 @@ def write_plugin_file(config, relative_path, content):
     path.write_text(str(content).rstrip() + "\n", encoding="utf-8")
 
 
+def is_editable_text_file(path):
+    try:
+        stat = path.stat()
+    except OSError:
+        return False
+    return path.is_file() and path.suffix.lower() in EDITABLE_EXTENSIONS and stat.st_size <= 1024 * 1024
+
+
 def safe_data_path(config, relative_path=""):
     data_dir = Path(config.get("data_dir", "")).resolve()
     rel = Path(str(relative_path or "").replace("\\", "/"))
@@ -530,8 +538,28 @@ def list_data_files(config, relative_path=""):
             "path": path.resolve().relative_to(data_dir).as_posix(),
             "type": "dir" if path.is_dir() else "file",
             "size": stat.st_size,
+            "editable": is_editable_text_file(path),
         })
     return {"cwd": target.relative_to(data_dir).as_posix() if target != data_dir else "", "entries": entries[:500]}
+
+
+def read_data_text_file(config, relative_path):
+    _, target = safe_data_path(config, relative_path)
+    if not target.exists():
+        raise FileNotFoundError(str(relative_path))
+    if not is_editable_text_file(target):
+        raise ValueError("Nur Text-Konfigdateien bis 1 MiB koennen im Browser editiert werden.")
+    return target.read_text(encoding="utf-8-sig", errors="replace")
+
+
+def write_data_text_file(config, relative_path, content):
+    _, target = safe_data_path(config, relative_path)
+    if target.suffix.lower() not in EDITABLE_EXTENSIONS:
+        raise ValueError("Nur typische Text-Konfigdateien koennen bearbeitet werden.")
+    if target.exists() and target.stat().st_size > 1024 * 1024:
+        raise ValueError("Datei ist groesser als 1 MiB und wird nicht im Browser editiert.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(str(content).rstrip() + "\n", encoding="utf-8")
 
 
 def delete_data_entry(config, relative_path):
@@ -1075,6 +1103,10 @@ class Handler(BaseHTTPRequestHandler):
                 query = urllib.parse.parse_qs(parsed.query)
                 rel_path = query.get("path", [""])[0]
                 self.send_json(list_data_files(read_server(parts[2]), rel_path))
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "file-content":
+                query = urllib.parse.parse_qs(parsed.query)
+                rel_path = query.get("path", [""])[0]
+                self.send_json({"path": rel_path, "content": read_data_text_file(read_server(parts[2]), rel_path)})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "players":
                 self.send_json(parse_player_list(run_rcon_command(read_server(parts[2]), "list")))
             elif parts == ["api", "versions"]:
@@ -1149,6 +1181,10 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.read_json()
                 write_plugin_file(read_server(parts[2]), body.get("path", ""), body.get("content", ""))
                 self.send_json({"message": "Plugin-Konfig gespeichert. Plugin oder Server muss ggf. neu geladen werden."})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "file-content":
+                body = self.read_json()
+                write_data_text_file(read_server(parts[2]), body.get("path", ""), body.get("content", ""))
+                self.send_json({"message": "Datei gespeichert. Server oder Plugin muss ggf. neu geladen werden."})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "files":
                 body = self.read_json()
                 config = read_server(parts[2])
