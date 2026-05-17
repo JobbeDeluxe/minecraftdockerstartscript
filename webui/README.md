@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.5`
+Version: `v1.0.6`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -146,6 +146,12 @@ Der Button `BlueMap oeffnen` und `BlueMap einbetten` laufen ueber den WebUI-Prox
 Dadurch reicht spaeter ein Reverse Proxy auf die WebUI; der Browser muss den BlueMap-Port nicht direkt erreichen.
 `BlueMap URL` ist der optionale Upstream fuer die WebUI, z. B. `http://127.0.0.1:8100/`. Wenn das Feld leer ist,
 nutzt die WebUI lokal `127.0.0.1:8100` oder den Host-Port aus einem Mapping wie `8123:8100/tcp`.
+
+## Backup-Fortschritt
+
+Bei `Backup` laeuft das Archivieren im Backend weiter, waehrend die WebUI das Aktionslog pollt.
+Alle 5 Sekunden schreibt das Backend die aktuelle Archivgroesse und die verstrichene Zeit ins Log.
+So bleibt im Ergebnisfenster sichtbar, ob ein grosses Backup noch arbeitet.
 
 ## Sicherheit
 

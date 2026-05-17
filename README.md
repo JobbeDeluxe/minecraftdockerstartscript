@@ -82,7 +82,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.5
+v1.0.6
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -188,6 +188,10 @@ Der ZIP-Upload ist fuer Welt-Importe oder Datenaustausch gedacht. Entpackt wird 
 
 Backups werden zentral abgelegt und enthalten den Server-/Containernamen im Dateinamen. Dadurch kann ein alter Server geloescht und spaeter wieder als neues Profil importiert werden.
 
+Waehrend ein Backup laeuft, pollt die WebUI das Aktionslog. Das Backend schreibt alle 5 Sekunden
+die aktuelle Archivgroesse und die verstrichene Zeit ins Log, damit grosse Backups nicht wie ein
+haengender Vorgang wirken.
+
 Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner und gibt Statusmeldungen im Ergebnisfenster aus. Import erstellt ein neues Profil und stellt das ausgewaehlte Backup dort wieder her.
 
 ## Hilfe im WebUI
@@ -219,4 +223,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.5` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.6` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

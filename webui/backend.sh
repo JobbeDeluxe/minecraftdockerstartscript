@@ -293,8 +293,29 @@ create_backup() {
     safe_name="$(printf '%s' "$SERVER_NAME" | tr -c 'A-Za-z0-9_.-' '_')"
     local backup_file="${BACKUP_ROOT}/${safe_name}_backup_$(date +%Y%m%d%H%M).tar.gz"
     log "Erstelle Backup: ${backup_file}"
-    tar --exclude="./backups" -czf "$backup_file" -C "$DATA_DIR" .
-    log "Backup abgeschlossen: ${backup_file}"
+    local start_time
+    start_time="$(date +%s)"
+    tar --exclude="./backups" -czf "$backup_file" -C "$DATA_DIR" . &
+    local tar_pid=$!
+    while kill -0 "$tar_pid" 2>/dev/null; do
+        sleep 5
+        if ! kill -0 "$tar_pid" 2>/dev/null; then
+            break
+        fi
+        local current_size elapsed_time
+        current_size="$(du -sh "$backup_file" 2>/dev/null | awk '{print $1}')"
+        elapsed_time=$(( $(date +%s) - start_time ))
+        log "Backup laeuft: Groesse=${current_size:-0}, verstrichene Zeit=${elapsed_time}s"
+    done
+    if wait "$tar_pid"; then
+        local final_size total_time
+        final_size="$(du -sh "$backup_file" 2>/dev/null | awk '{print $1}')"
+        total_time=$(( $(date +%s) - start_time ))
+        log "Backup abgeschlossen: ${backup_file} (Groesse: ${final_size:-unbekannt}, Dauer: ${total_time}s)"
+    else
+        log "Fehler beim Erstellen des Backups." >&2
+        return 1
+    fi
 }
 
 restore_backup() {
