@@ -117,6 +117,13 @@ const I18N = {
     "dirty.unsaved": "ungespeichert",
     "warnings.initial": "Noch keine Pruefung.",
     "warnings.none": "Keine offensichtlichen Port-Konflikte gefunden.",
+    "warning.duplicatePort": "{label}: Port {port}/{proto} ist im selben Profil doppelt belegt ({other}).",
+    "warning.profileConflict": "{label}: Port {port}/{proto} kollidiert mit Profil {profiles}.",
+    "warning.hostOpen": "{label}: Port {port}/{proto} scheint auf dem Host bereits offen zu sein.",
+    "warning.dockerPublished": "{label}: Port {port}/{proto} wird bereits von Docker-Container {containers} publiziert.",
+    "warning.ownContainer": "{label}: Port {port}/{proto} wird vom eigenen Container {container} genutzt.",
+    "warning.rconPassword": "rcon: RCON ist aktiv, aber es ist noch kein Passwort gesetzt.",
+    "warning.eula": "eula: Die Minecraft EULA ist noch nicht akzeptiert; Anwenden wird blockiert.",
     "network.none": "Keine Netzwerk-Gruppe im aktuellen Profil gesetzt.",
     "network.group": "Gruppe: {group}",
     "network.proxy": "Proxy: {proxy}",
@@ -372,6 +379,13 @@ Nicht editierbare Dateien wie .jar oder grosse Weltdaten werden nur fuer Umbenen
     "dirty.unsaved": "unsaved",
     "warnings.initial": "No check yet.",
     "warnings.none": "No obvious port conflicts found.",
+    "warning.duplicatePort": "{label}: Port {port}/{proto} is used twice in this profile ({other}).",
+    "warning.profileConflict": "{label}: Port {port}/{proto} conflicts with profile {profiles}.",
+    "warning.hostOpen": "{label}: Port {port}/{proto} already appears to be open on the host.",
+    "warning.dockerPublished": "{label}: Port {port}/{proto} is already published by Docker container {containers}.",
+    "warning.ownContainer": "{label}: Port {port}/{proto} is used by this profile's own container {container}.",
+    "warning.rconPassword": "rcon: RCON is enabled, but no password has been set yet.",
+    "warning.eula": "eula: The Minecraft EULA has not been accepted yet; Apply will be blocked.",
     "network.none": "No network group set on the current profile.",
     "network.group": "Group: {group}",
     "network.proxy": "Proxy: {proxy}",
@@ -629,6 +643,7 @@ function setLanguage(next) {
   renderServers();
   renderEditor();
   renderNetworkSummary();
+  if (selected) checkPorts().catch(() => {});
 }
 function current() { return servers.find(server => server.id === selected) || {}; }
 function currentDisabled() {
@@ -1362,8 +1377,24 @@ async function checkPorts() {
   const result = await api(`/api/servers/${selected}/ports`);
   showWarnings(result.warnings);
 }
+function translateWarning(warning) {
+  if (lang === "de") return warning;
+  let match = warning.match(/^([^:]+): Port (\d+)\/(tcp|udp) ist im selben Profil doppelt belegt \((.+)\)\.$/);
+  if (match) return t("warning.duplicatePort", { label: match[1], port: match[2], proto: match[3], other: match[4] });
+  match = warning.match(/^([^:]+): Port (\d+)\/(tcp|udp) kollidiert mit Profil (.+)\.$/);
+  if (match) return t("warning.profileConflict", { label: match[1], port: match[2], proto: match[3], profiles: match[4] });
+  match = warning.match(/^([^:]+): Port (\d+)\/(tcp|udp) scheint auf dem Host bereits offen zu sein\.$/);
+  if (match) return t("warning.hostOpen", { label: match[1], port: match[2], proto: match[3] });
+  match = warning.match(/^([^:]+): Port (\d+)\/(tcp|udp) wird bereits von Docker-Container (.+) publiziert\.$/);
+  if (match) return t("warning.dockerPublished", { label: match[1], port: match[2], proto: match[3], containers: match[4] });
+  match = warning.match(/^([^:]+): Port (\d+)\/(tcp|udp) wird vom eigenen Container (.+) genutzt\.$/);
+  if (match) return t("warning.ownContainer", { label: match[1], port: match[2], proto: match[3], container: match[4] });
+  if (warning === I18N.de["warning.rconPassword"]) return t("warning.rconPassword");
+  if (warning === I18N.de["warning.eula"]) return t("warning.eula");
+  return warning;
+}
 function showWarnings(warnings) {
-  $("warnings").textContent = warnings.length ? warnings.join("\n") : t("warnings.none");
+  $("warnings").textContent = warnings.length ? warnings.map(translateWarning).join("\n") : t("warnings.none");
 }
 
 applyLanguageStatic();
