@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.15`
+Version: `v1.0.16`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -62,6 +62,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Lokale Serverdaten loeschen, ohne Profil oder zentrale Backups zu entfernen
 - Datenverzeichnis nachtraeglich verschieben und das Profil automatisch anpassen
+- Ungespeicherte Profil-Aenderungen mit `Lokale Version laden` verwerfen und neu aus dem lokalen WebUI-State laden
 - Velocity-Netzwerkgruppen fuer Proxy und Backend-Server konfigurieren
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 

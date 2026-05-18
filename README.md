@@ -79,13 +79,14 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 ```
 
 Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktualisiert den Docker-Container, damit Version, RAM, Ports, Docker-Image, RCON und Volumes wirklich aktiv werden.
+`Lokale Version laden` verwirft ungespeicherte Profil-Aenderungen und laedt die gespeicherte Profilversion neu. Beim Wechsel in ein anderes Profil wird der ungespeichert-Status des alten Formulars ebenfalls zurueckgesetzt.
 
 ## WebUI-Version
 
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.15
+v1.0.16
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -234,7 +235,7 @@ Restore stoppt den betroffenen Container, entpackt das Backup in den Datenordner
 
 ## Hilfe im WebUI
 
-Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap, Datei-/Konfig-Bearbeitung, das eingebundene Icon und den Unterschied zwischen `Speichern` und `Anwenden`.
+Die Hilfe erklaert die wichtigsten Felder direkt im Browser, unter anderem ID, Name, Container, Ports, RCON, Plugins, Backups, BlueMap, Datei-/Konfig-Bearbeitung, das eingebundene Icon, `Lokale Version laden` und den Unterschied zwischen `Speichern` und `Anwenden`.
 
 ## CLI-Modus
 
@@ -261,4 +262,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.15` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.16` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
