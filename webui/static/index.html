@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minecraft Docker WebUI</title>
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/minecraft-docker-webui-spigot-icon-96.png">
+<link rel="apple-touch-icon" sizes="128x128" href="/assets/minecraft-docker-webui-icon-128.png">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header><div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><h1>Minecraft Docker WebUI <span class="version">v1.0.16</span></h1></div><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<main>
+<aside><div id="servers"></div></aside>
+<section class="content">
+<form id="editor"></form>
+<div class="box"><h2>Portpruefung</h2><div id="warnings" class="warnings muted">Noch keine Pruefung.</div></div>
+<div class="box"><h2>Velocity-Netzwerk</h2><pre id="networkSummary" class="small-output"></pre><div class="actions"><button id="applyNetwork" class="warn" type="button">Netzwerk anwenden</button></div></div>
+<div class="actions"><button class="primary" data-action="apply">Anwenden</button><button data-action="start">Start</button><button data-action="stop">Stop</button><button data-action="restart">Restart</button><button id="profileToggle" data-action="disable">Deaktivieren</button><button class="warn" data-action="backup">Backup</button><button class="warn" data-action="delete-data">Lokale Daten loeschen</button><button id="deleteServer" type="button">Server loeschen</button><button id="refreshLogs" type="button">Logs laden</button><button id="liveLogs" type="button">Live Logs</button><button id="openMap" type="button">BlueMap oeffnen</button><button id="embedMap" type="button">BlueMap einbetten</button></div>
+<iframe id="mapFrame" class="map-frame" hidden title="BlueMap"></iframe>
+<div class="box"><h2>Spieler <span id="playerSummary" class="muted"></span></h2><div class="actions"><select id="players"></select><input id="playerName" placeholder="Spielername manuell"><button id="refreshPlayers" type="button">Spieler laden</button></div><div class="actions"><input id="targetPlayer" placeholder="Zielspieler fuer TP"><button data-rcon-shortcut="tp" type="button">TP zu Spieler</button><input id="giveItem" placeholder="minecraft:diamond"><input id="giveAmount" type="number" min="1" value="1"><button data-rcon-shortcut="give" type="button">Give</button><button data-rcon-shortcut="kick" type="button">Kick</button><button data-rcon-shortcut="ban" class="warn" type="button">Ban</button><button data-rcon-shortcut="pardon" type="button">Pardon</button></div></div>
+<div class="box"><h2>RCON Konsole</h2><div class="actions"><input id="rconCommand" placeholder="say Hallo Welt / list / save-all"><button id="sendRcon" type="button">Senden</button></div></div>
+<div class="box"><h2>Backups</h2><div class="actions"><select id="backups"></select><button id="restoreBackup" class="warn" type="button">Restore</button><input id="importId" placeholder="neue-server-id"><button id="importBackup" type="button">Als neuen Server importieren</button></div></div>
+<div class="box"><h2>server.properties <span id="propertiesDirty" class="warnings"></span></h2><textarea id="serverProperties" spellcheck="false"></textarea><div class="actions"><button id="saveProperties" type="button">server.properties speichern</button><button id="reloadProperties" type="button">Neu laden</button></div></div>
+<div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button><button id="refreshInstalledPlugins" type="button">Installierte Plugins laden</button><select id="installedPluginSelect"></select><button id="deleteInstalledPlugin" class="warn" type="button">Installiertes Plugin loeschen</button></div><pre id="installedPlugins" class="small-output"></pre></div>
+<div class="box"><h2>Dateien <span id="fileEditorDirty" class="warnings"></span></h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Zurueck</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="file-browser"><section class="file-pane"><h3>Ordner</h3><div id="fileFolders" class="file-list"></div></section><section class="file-pane"><h3>Dateien</h3><div id="fileEntries" class="file-list file-list-buttons"></div></section></div><div class="actions"><input id="fileEditorPath" readonly placeholder="Keine Textdatei ausgewaehlt"><button id="reloadFileContent" type="button">Inhalt neu laden</button><button id="saveFileContent" type="button">Datei speichern</button></div><textarea id="fileContent" spellcheck="false" placeholder="Text-Konfigdatei rechts anklicken, z. B. velocity.toml, forwarding.secret, server.properties oder Plugin-Konfigs"></textarea><div class="actions"><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div></div>
+<div class="output"><pre id="log"></pre><pre id="result"></pre></div>
+<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
+Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
+Lokale Version laden verwirft ungespeicherte Profil-Aenderungen und laedt die gespeicherte Profilversion neu.
+Das Spigot/WebUI-Icon ist als Header-Icon, Browser-Favicon und App-Icon eingebunden. Die PNG-Dateien liegen im Repository unter docs/assets.
+Stop haelt den Container an und loescht ihn danach. Profil und Daten bleiben erhalten; Start oder Anwenden erstellt den Container neu.
+Deaktivieren entfernt nur den Docker-Container und markiert das Profil als deaktiviert. Profil und Daten bleiben erhalten, der Host-Port wird frei.
+Deaktivierte Profile werden links ausgegraut und als deaktiviert angezeigt. Ihre Ports blockieren andere Profile nicht mehr.
+Bei deaktivierten Profilen wird aus dem Button Deaktivieren automatisch Aktivieren. Aktivieren startet keinen Container, sondern nimmt das Profil nur wieder in Status- und Portpruefung auf.
+Anwenden, Start oder Restart aktiviert ein deaktiviertes Profil wieder, wenn die Aktion erfolgreich ist.
+
+Profilfelder
+ID: stabile interne Profil-ID und Dateiname. Nach dem Anlegen moeglichst nicht mehr aendern.
+Name: Anzeigename in der WebUI.
+Container: Docker-Containername, den die WebUI startet/stoppt und fuer Portpruefungen erkennt.
+Datenverzeichnis: Host-Ordner, der bei Minecraft-Servern als /data und bei Proxy-Servern als /server gemountet wird. Wenn der Pfad spaeter korrigiert werden soll, neuen Pfad eintragen und Daten verschieben nutzen.
+Typ: normale Minecraft-Typen nutzen itzg/minecraft-server. BungeeCord, Waterfall und Velocity nutzen automatisch itzg/mc-proxy.
+Docker Image: bei leerem oder Standardwert setzt die WebUI das passende Image automatisch.
+Netzwerk-Gruppe: gleicher Gruppenname verbindet einen Velocity-Proxy mit seinen Backend-Servern.
+Netzwerk-Rolle: Auto erkennt Velocity als Proxy und normale Java-Server als Backend. Bei Sonderfaellen Proxy oder Backend manuell setzen.
+Netzwerk-Alias: Name fuer Velocity-Befehle wie /server lobby. Leer nutzt die Profil-ID.
+Default-Ziel: nur beim Velocity-Profil relevant; erster Zielserver fuer neue Spieler, z. B. lobby.
+
+Velocity-Netzwerk
+Alle Server derselben Netzwerk-Gruppe werden als Gruppe betrachtet. Es muss genau einen Velocity-Proxy und mindestens einen Backend-Server geben.
+Netzwerk anwenden schreibt oder aktualisiert velocity.toml, forwarding.secret, server.properties und bei Paper/Purpur/Folia config/paper-global.yml. Ausserdem bekommen die Profile Docker-Netzwerkdaten, damit die Container sich per Containername im gemeinsamen Docker-Netzwerk erreichen.
+Danach die betroffenen Server per Anwenden oder Restart neu erstellen, damit Docker-Netzwerk und Konfigdateien aktiv sind.
+Der Assistent setzt das moderne Velocity-Forwarding und deaktiviert online-mode auf den Backend-Servern. Bedrock/Geyser-Chat oder Spezial-Plugin-Konfigs bleiben vorerst manuelle Feineinstellung.
+
+Ports und RCON
+Host-Port: oeffentlicher Java-/Proxy-Port auf dem Host. Minecraft nutzt intern 25565. Velocity nutzt den bind-Port aus velocity.toml, sonst 25565. BungeeCord/Waterfall nutzen intern 25577.
+Extra Ports: mehrere Ports mit Komma, Leerzeichen oder Zeilenumbruch trennen, z. B. 19132:19132/udp, 24454:24454/udp.
+RCON Host-Port: eindeutiger Host-Port je Server, z. B. 25575, 25576.
+RCON Container-Port: kann meist 25575 bleiben.
+Die Portpruefung ignoriert nur Profile, die wirklich deaktiviert sind. Aktive Profile mit gleichem Host-Port blockieren weiterhin, damit nicht versehentlich zwei Server auf denselben Port starten.
+
+Version und RAM
+Memory: allgemeiner RAM-Wert fuer das Docker-Image. Eingaben wie 1GB werden als 1G gespeichert.
+Min/Max RAM: optional; leer lassen, wenn MEMORY reichen soll.
+Bei Velocity/BungeeCord/Waterfall ist LATEST meist sinnvoller als Minecraft-Versionsnummern.
+
+BlueMap
+BlueMap URL: optionaler interner Upstream fuer den WebUI-Proxy, z. B. http://127.0.0.1:8100/.
+Leer lassen nutzt lokal 127.0.0.1:8100 oder den Host-Port aus Extra Ports wie 8123:8100/tcp.
+BlueMap oeffnen/einbetten laeuft ueber /map/SERVER_ID/ und funktioniert dadurch auch hinter einem Reverse Proxy zur WebUI.
+
+Backups und Dateien
+Backups liegen zentral im Backup-Ordner und enthalten den Containernamen im Dateinamen.
+Waehrend ein Backup laeuft, zeigt die WebUI den Fortschritt aus dem Aktionslog an, inklusive aktueller Archivgroesse und verstrichener Zeit.
+Lokale Daten loeschen entfernt Container und Datenordner, laesst aber Profil und zentrale Backups stehen. Deaktivieren entfernt nur den Container und markiert das Profil als deaktiviert. Server loeschen entfernt Profil, Docker-Container und Datenordner.
+Ordner fuer Welten am besten als ZIP hochladen; die WebUI entpackt das ZIP in den aktuellen Ordner.
+Im Datei-Browser oeffnet ein Klick auf den Ordnernamen den Ordner. Auswahl markiert einen Ordner fuer Umbenennen oder Loeschen. Zurueck geht eine Ebene nach oben.
+
+Plugins
+Eine Zeile in plugins.txt besteht aus Name und Quelle. # deaktiviert eine Zeile.
+Bei modrinth:<slug> waehlt die WebUI passend zum Server-Typ den Loader, z. B. velocity fuer Velocity und paper/spigot/bukkit fuer Paper. Wenn kein passender Loader gefunden wird, gibt es eine Fehlermeldung statt einer falschen JAR.
+Beispiele:
+  BlueMap modrinth:bluemap
+  Geyser modrinth:geyser
+  Geyser-Velocity https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/velocity
+  Floodgate https://github.com/GeyserMC/Floodgate
+  WorldEdit modrinth:worldedit
+  DiscordSRV modrinth:discordsrv
+  DiscordSRV https://download.discordsrv.com/v2/DiscordSRV/DiscordSRV/release/download/latest/jar
+  CoreProtect https://github.com/PlayPro/CoreProtect
+  CoreProtect https://github.com/PlayPro/CoreProtect:master
+  CoreProtect build:master
+
+Dateien und Konfigs
+Der Datei-Browser zeigt Ordner links und Dateien rechts. Ein Klick auf einen Ordner oeffnet ihn, Zurueck geht eine Ebene hoch.
+Text-Konfigdateien wie velocity.toml, forwarding.secret, server.properties, .yml, .json, .conf oder .txt werden heller markiert. Ein Klick auf so eine Datei laedt sie direkt in den Editor darunter; Inhalt neu laden aktualisiert die geoeffnete Datei, Datei speichern schreibt sie zurueck.
+Nicht editierbare Dateien wie .jar oder grosse Weltdaten werden nur fuer Umbenennen oder Loeschen ausgewaehlt.
+Manuelle Plugins werden in DATA_DIR/plugins/manuell gespeichert und beim Containerstart geladen.
+CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein git, aber curl/wget und entweder mvn oder Docker fuer den Maven-Container.</pre><button id="closeHelp">Schliessen</button></div></dialog>
+<datalist id="versionOptions"></datalist>
+</section>
+</main>
+<script src="/static/app.js?v=1.0.16"></script>
+</body>
+</html>
