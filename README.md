@@ -26,6 +26,7 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Portpruefung gegen andere Profile und laufende Docker-Container
 - Deaktivierte Profile werden ausgegraut, als `deaktiviert` markiert und geben ihre Ports frei
+- Frontend-Sprachauswahl fuer Deutsch und Englisch
 - EULA, RAM, Version, Paper-Channel, RCON, Extra-Ports und Backup-Pfad direkt im Browser setzen
 - Versionsfeld mit manueller Eingabe plus Versionsliste/Refresh
 - Live-Logs und normales Logfenster
@@ -86,7 +87,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.16
+v1.0.17
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -262,4 +263,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.16` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.0.17` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

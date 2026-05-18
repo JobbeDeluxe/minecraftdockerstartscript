@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header><div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><h1>Minecraft Docker WebUI <span class="version">v1.0.16</span></h1></div><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
+<header><div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><h1>Minecraft Docker WebUI <span class="version">v1.0.17</span></h1></div><div class="actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><select id="languageSelect" class="language-select" aria-label="Sprache"><option value="de">DE</option><option value="en">EN</option></select><span id="configDirty" class="warnings"></span><button id="helpButton">Hilfe</button><button id="newServer">Neu</button></div></header>
 <main>
 <aside><div id="servers"></div></aside>
 <section class="content">
@@ -25,7 +25,7 @@
 <div class="box"><h2>Plugins.txt <span id="pluginDirty" class="warnings"></span></h2><textarea id="plugins" spellcheck="false"></textarea><div class="actions"><button id="savePlugins" type="button">Plugins speichern</button><button id="reloadPlugins" type="button">Lokale Version laden</button><button id="updatePlugins" class="warn" type="button">Plugins aktualisieren</button></div><div class="actions"><input id="manualPluginFile" type="file" accept=".jar"><button id="uploadPlugin" type="button">Manuelles Plugin hochladen</button><select id="manualPlugins"></select><button id="deleteManualPlugin" type="button">Manuelles Plugin loeschen</button><button id="refreshInstalledPlugins" type="button">Installierte Plugins laden</button><select id="installedPluginSelect"></select><button id="deleteInstalledPlugin" class="warn" type="button">Installiertes Plugin loeschen</button></div><pre id="installedPlugins" class="small-output"></pre></div>
 <div class="box"><h2>Dateien <span id="fileEditorDirty" class="warnings"></span></h2><div class="actions"><input id="filePath" placeholder="Ordnerpfad, leer = DATA_DIR"><button id="loadFiles" type="button">Ordner laden</button><button id="upFiles" type="button">Zurueck</button><input id="newFolderName" placeholder="neuer Ordner"><button id="makeFolder" type="button">Ordner erstellen</button></div><div class="file-browser"><section class="file-pane"><h3>Ordner</h3><div id="fileFolders" class="file-list"></div></section><section class="file-pane"><h3>Dateien</h3><div id="fileEntries" class="file-list file-list-buttons"></div></section></div><div class="actions"><input id="fileEditorPath" readonly placeholder="Keine Textdatei ausgewaehlt"><button id="reloadFileContent" type="button">Inhalt neu laden</button><button id="saveFileContent" type="button">Datei speichern</button></div><textarea id="fileContent" spellcheck="false" placeholder="Text-Konfigdatei rechts anklicken, z. B. velocity.toml, forwarding.secret, server.properties oder Plugin-Konfigs"></textarea><div class="actions"><input id="renameName" placeholder="neuer Name"><button id="renameEntry" type="button">Umbenennen</button><button id="deleteEntry" class="warn" type="button">Loeschen</button></div><div class="actions"><input id="zipUpload" type="file" accept=".zip"><button id="uploadZip" type="button">ZIP in aktuellen Ordner entpacken</button></div></div>
 <div class="output"><pre id="log"></pre><pre id="result"></pre></div>
-<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre class="muted">Wichtig
+<dialog id="helpDialog"><div class="box"><h2>Hilfe</h2><pre id="helpText" class="muted">Wichtig
 Speichern sichert das WebUI-Profil. Anwenden erstellt den Container immer neu. Start/Restart erstellt ihn automatisch neu, wenn RAM, Version, Ports, Docker-Image, RCON oder Volumes nicht mehr zum Profil passen.
 Lokale Version laden verwirft ungespeicherte Profil-Aenderungen und laedt die gespeicherte Profilversion neu.
 Das Spigot/WebUI-Icon ist als Header-Icon, Browser-Favicon und App-Icon eingebunden. Die PNG-Dateien liegen im Repository unter docs/assets.
@@ -101,6 +101,6 @@ CoreProtect wird aus dem GitHub-Source-Zip gebaut. Dafuer braucht der Host kein 
 <datalist id="versionOptions"></datalist>
 </section>
 </main>
-<script src="/static/app.js?v=1.0.16"></script>
+<script src="/static/app.js?v=1.0.17"></script>
 </body>
 </html>

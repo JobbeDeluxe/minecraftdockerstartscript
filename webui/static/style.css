@@ -8,6 +8,7 @@ h1{margin:0;font-size:18px}
 .version{font-size:12px;color:var(--muted);font-weight:500;margin-left:8px}
 .github-link{display:inline-flex;align-items:center;min-height:36px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:#202832;color:var(--text);text-decoration:none}
 .github-link:hover{border-color:var(--accent)}
+.language-select{width:auto;min-width:74px}
 main{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 88px)}
 aside{border-right:1px solid var(--line);padding:14px;background:#14191f}
 .content{padding:16px}

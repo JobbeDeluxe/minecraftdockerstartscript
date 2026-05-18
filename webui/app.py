@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
 ASSET_DIR = ROOT / "docs" / "assets"
-APP_VERSION = "v1.0.16"
+APP_VERSION = "v1.0.17"
 PUBLIC_ASSETS = {
     "minecraft-docker-webui-spigot-icon-96.png",
     "minecraft-docker-webui-icon-128.png",
