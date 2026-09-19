@@ -951,7 +951,38 @@ def run_backend_action(config, action):
     if action in {"apply", "start", "restart"}:
         blockers = blocking_action_warnings(config)
         if blockers:
-            return {"ok": False, "code": 2, "stdout": "", "stderr": "\n".join(blockers)}
+            port_blockers = [
+                warning for warning in blockers
+                if (
+                    "Port " in warning
+                    or "doppelt" in warning
+                    or "kollidiert" in warning
+                    or "Docker-Container" in warning
+                )
+            ]
+            if port_blockers:
+                message = (
+                    "Kann nicht starten oder anwenden, weil ein Portkonflikt besteht. "
+                    "Bitte Host-Port, RCON-Host-Port und Extra Ports prüfen."
+                )
+                return {
+                    "ok": False,
+                    "code": 2,
+                    "stdout": "",
+                    "stderr": f"{message}\n\nDetails:\n" + "\n".join(blockers),
+                    "error_type": "port_conflict",
+                    "message": message,
+                    "blockers": blockers,
+                }
+            return {
+                "ok": False,
+                "code": 2,
+                "stdout": "",
+                "stderr": "\n".join(blockers),
+                "error_type": "configuration_blocked",
+                "message": blockers[0],
+                "blockers": blockers,
+            }
     env_file = write_temp_env(config)
     try:
         return run_command(["bash", str(BACKEND), "--config", env_file, "--action", action], timeout=3600)

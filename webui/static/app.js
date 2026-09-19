@@ -611,6 +611,9 @@ Object.assign(I18N.de, {
   "automation.status.running": "läuft",
   "automation.status.success": "erfolgreich",
   "automation.status.error": "Fehler",
+  "action.portConflict": "Kann nicht starten oder anwenden, weil ein Portkonflikt besteht. Bitte Host-Port, RCON-Host-Port und Extra Ports prüfen.",
+  "action.completed": "{label} wurde erfolgreich abgeschlossen.",
+  "action.failed": "{label} konnte nicht ausgeführt werden.",
   "activity.title": "Aktionsausgabe",
   "activity.clear": "Leeren"
 });
@@ -682,6 +685,9 @@ Object.assign(I18N.en, {
   "automation.status.running": "running",
   "automation.status.success": "success",
   "automation.status.error": "error",
+  "action.portConflict": "Cannot start or apply because there is a port conflict. Check the host port, RCON host port and extra ports.",
+  "action.completed": "{label} completed successfully.",
+  "action.failed": "{label} could not be completed.",
   "activity.title": "Action output",
   "activity.clear": "Clear"
 });
@@ -833,6 +839,7 @@ function selectServer(serverId) {
   }
   selected = serverId;
   setConfigDirty(false);
+  setActionStatus("");
   renderServers();
   renderEditor();
   renderNetworkSummary();
@@ -1169,6 +1176,7 @@ async function runProfileAction(action) {
     }
     const serverId = selected;
     const label = actionLabel(action);
+    setActionStatus(t("message.actionRunning", { label }), "info");
     showOutput(`${note}${t("message.actionRunning", { label })}`);
     const refreshLog = async () => {
       try {
@@ -1186,9 +1194,19 @@ async function runProfileAction(action) {
       poll = null;
     }
     showOutput(`${note}$ ${action}\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
+    if (result.ok) {
+      setActionStatus(t("action.completed", { label }), "success");
+    } else {
+      const heading = result.error_type === "port_conflict"
+        ? t("action.portConflict")
+        : (result.message || result.stderr || result.stdout || t("action.failed", { label }));
+      const details = (result.blockers || []).map(translateWarning).join("\n");
+      setActionStatus([heading, details].filter(Boolean).join("\n\n"), "error");
+    }
     await loadServers();
   } catch (err) {
     if (poll) clearInterval(poll);
+    setActionStatus(err.message, "error");
     showOutput(err.message);
   }
 }
@@ -1309,6 +1327,13 @@ function setConfigDirty(value) {
 function showOutput(text) {
   $("result").textContent = text;
   $("result").scrollTop = $("result").scrollHeight;
+}
+function setActionStatus(message, type = "info") {
+  const box = $("actionStatus");
+  if (!box) return;
+  box.textContent = message || "";
+  box.className = `action-status ${type}`;
+  box.hidden = !message;
 }
 function waitPaint() { return new Promise(resolve => setTimeout(resolve, 80)); }
 $("savePlugins").onclick = async () => savePlugins();
