@@ -10,9 +10,12 @@ import secrets
 import socket
 import subprocess
 import tempfile
+import threading
+import time
 import urllib.parse
 import urllib.request
 import zipfile
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -20,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
 ASSET_DIR = ROOT / "docs" / "assets"
-APP_VERSION = "v1.0.16"
+APP_VERSION = "v1.1.0"
 PUBLIC_ASSETS = {
     "minecraft-docker-webui-spigot-icon-96.png",
     "minecraft-docker-webui-icon-128.png",
@@ -28,10 +31,15 @@ PUBLIC_ASSETS = {
 STATE_DIR = Path(os.environ.get("MCDOCKER_WEBUI_HOME", Path.home() / ".minecraftdocker-webui"))
 SERVER_DIR = STATE_DIR / "servers"
 RUN_DIR = STATE_DIR / "run"
+SCHEDULE_PATH = STATE_DIR / "schedules.json"
 INIT_MARKER = STATE_DIR / ".initialized"
 SAFE_ID = re.compile(r"^[a-zA-Z0-9_.-]+$")
 PORT_RE = re.compile(r"^(\d+):(\d+)(?:/(tcp|udp))?$", re.I)
 MEMORY_RE = re.compile(r"^(\d+)\s*([kmg])(?:b)?$", re.I)
+TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+SCHEDULE_ACTIONS = {"restart", "start", "stop", "backup", "plugins", "plugins-restart", "rcon"}
+SCHEDULE_LOCK = threading.RLock()
+RUNNING_SCHEDULES = set()
 
 DEFAULT_SERVER = {
     "id": "survival",
@@ -955,9 +963,222 @@ def run_backend_action(config, action):
 
 
 def run_rcon_command(config, command):
+    command = str(command or "").strip()
+    if command.startswith("/"):
+        command = command[1:].lstrip()
+    if not command:
+        raise ValueError("Bitte einen RCON-Befehl eingeben.")
+    if len(command) > 4096:
+        raise ValueError("Der RCON-Befehl ist zu lang (maximal 4096 Zeichen).")
+    if is_disabled(config):
+        raise ValueError("Das Serverprofil ist deaktiviert.")
+    if not config.get("rcon_enabled"):
+        raise ValueError("RCON ist fuer diesen Server nicht aktiviert.")
+    if not str(config.get("rcon_password") or "").strip():
+        raise ValueError("RCON ist aktiviert, aber es ist kein Passwort gesetzt.")
     config = config.copy()
     config["rcon_command"] = command
     return run_backend_action(config, "rcon")
+
+
+def read_schedules_unlocked():
+    if not SCHEDULE_PATH.exists():
+        return []
+    try:
+        data = json.loads(SCHEDULE_PATH.read_text(encoding="utf-8-sig"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def write_schedules_unlocked(schedules):
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = SCHEDULE_PATH.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(schedules, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(temp_path, SCHEDULE_PATH)
+
+
+def list_schedules():
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+    return sorted(schedules, key=lambda item: (str(item.get("time", "")), str(item.get("name", "")).lower()))
+
+
+def normalize_schedule(payload, existing=None):
+    existing = existing or {}
+    schedule_id = str(existing.get("id") or payload.get("id") or f"schedule-{secrets.token_hex(4)}").strip()
+    if not SAFE_ID.match(schedule_id):
+        raise ValueError("Ungueltige Scheduler-ID.")
+    name = str(payload.get("name", existing.get("name", "Automatisierung"))).strip()[:100]
+    target = str(payload.get("target", existing.get("target", "all"))).strip()
+    action = str(payload.get("action", existing.get("action", "restart"))).strip().lower()
+    run_time = str(payload.get("time", existing.get("time", "03:00"))).strip()
+    days_raw = payload.get("days", existing.get("days", list(range(7))))
+    try:
+        days = sorted({int(day) for day in days_raw if 0 <= int(day) <= 6})
+    except (TypeError, ValueError):
+        days = []
+    if not name:
+        raise ValueError("Bitte einen Namen fuer die Automatisierung eingeben.")
+    if target != "all" and not server_path(target).exists():
+        raise ValueError(f"Serverprofil nicht gefunden: {target}")
+    if action not in SCHEDULE_ACTIONS:
+        raise ValueError("Diese Scheduler-Aktion wird nicht unterstuetzt.")
+    if not TIME_RE.match(run_time):
+        raise ValueError("Die Uhrzeit muss im Format HH:MM angegeben werden.")
+    if not days:
+        raise ValueError("Bitte mindestens einen Wochentag auswaehlen.")
+    command = str(payload.get("command", existing.get("command", ""))).strip()
+    if action == "rcon" and not command:
+        raise ValueError("Fuer eine RCON-Automatisierung wird ein Befehl benoetigt.")
+    schedule = {
+        "id": schedule_id,
+        "name": name,
+        "target": target,
+        "action": action,
+        "time": run_time,
+        "days": days,
+        "command": command[:4096],
+        "enabled": bool(payload.get("enabled", existing.get("enabled", True))),
+        "created_at": existing.get("created_at") or datetime.now().astimezone().isoformat(timespec="seconds"),
+    }
+    for key in ("last_run_at", "last_run_key", "last_status", "last_result"):
+        if key in existing:
+            schedule[key] = existing[key]
+    return schedule
+
+
+def save_schedule(payload):
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+        requested_id = str(payload.get("id") or "").strip()
+        index = next((i for i, item in enumerate(schedules) if item.get("id") == requested_id), None)
+        existing = schedules[index] if index is not None else None
+        schedule = normalize_schedule(payload, existing)
+        if index is None:
+            schedules.append(schedule)
+        else:
+            schedules[index] = schedule
+        write_schedules_unlocked(schedules)
+    return schedule
+
+
+def delete_schedule(schedule_id):
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+        filtered = [item for item in schedules if item.get("id") != schedule_id]
+        if len(filtered) == len(schedules):
+            raise FileNotFoundError(schedule_id)
+        if schedule_id in RUNNING_SCHEDULES:
+            raise ValueError("Diese Automatisierung laeuft gerade und kann noch nicht geloescht werden.")
+        write_schedules_unlocked(filtered)
+
+
+def scheduled_targets(target):
+    if target == "all":
+        return [server for server in list_servers() if not is_disabled(server)]
+    config = read_server(target)
+    return [] if is_disabled(config) else [config]
+
+
+def execute_schedule(schedule):
+    results = []
+    targets = scheduled_targets(schedule.get("target", "all"))
+    if not targets:
+        return False, "Keine aktiven Server fuer diese Automatisierung gefunden."
+    overall_ok = True
+    for config in targets:
+        server_name = config.get("name") or config.get("id")
+        action = schedule.get("action")
+        steps = []
+        if action == "plugins-restart":
+            steps = [("plugins", None), ("restart", None)]
+        elif action == "rcon":
+            steps = [("rcon", schedule.get("command", ""))]
+        else:
+            steps = [(action, None)]
+        results.append(f"[{server_name}]")
+        for step, command in steps:
+            try:
+                result = run_rcon_command(config, command) if step == "rcon" else run_backend_action(config, step)
+            except Exception as exc:
+                result = {"ok": False, "code": 1, "stdout": "", "stderr": str(exc)}
+            results.append(f"$ {step} (exit {result.get('code', 1)})")
+            output = "\n".join(part.strip() for part in (result.get("stdout", ""), result.get("stderr", "")) if part.strip())
+            if output:
+                results.append(output[-6000:])
+            if not result.get("ok"):
+                overall_ok = False
+                break
+        results.append("")
+    return overall_ok, "\n".join(results).strip()
+
+
+def _schedule_worker(schedule):
+    try:
+        ok, output = execute_schedule(schedule)
+    except Exception as exc:
+        ok, output = False, f"Automatisierung abgebrochen: {exc}"
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+        for item in schedules:
+            if item.get("id") == schedule.get("id"):
+                item["last_status"] = "success" if ok else "error"
+                item["last_result"] = output[-12000:]
+                break
+        RUNNING_SCHEDULES.discard(schedule.get("id"))
+        write_schedules_unlocked(schedules)
+
+
+def recover_interrupted_schedules():
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+        changed = False
+        for schedule in schedules:
+            if schedule.get("last_status") == "running":
+                schedule["last_status"] = "error"
+                schedule["last_result"] = "Die WebUI wurde beendet, waehrend diese Automatisierung lief. Bitte Ausgabe und Serverstatus pruefen."
+                changed = True
+        if changed:
+            write_schedules_unlocked(schedules)
+
+
+def trigger_schedule(schedule_id, run_key=None):
+    with SCHEDULE_LOCK:
+        schedules = read_schedules_unlocked()
+        schedule = next((item for item in schedules if item.get("id") == schedule_id), None)
+        if not schedule:
+            raise FileNotFoundError(schedule_id)
+        if schedule_id in RUNNING_SCHEDULES:
+            raise ValueError("Diese Automatisierung laeuft bereits.")
+        RUNNING_SCHEDULES.add(schedule_id)
+        schedule["last_run_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        schedule["last_run_key"] = run_key or f"manual-{time.time_ns()}"
+        schedule["last_status"] = "running"
+        schedule["last_result"] = "Automatisierung wurde gestartet."
+        write_schedules_unlocked(schedules)
+        snapshot = dict(schedule)
+    threading.Thread(target=_schedule_worker, args=(snapshot,), daemon=True, name=f"schedule-{schedule_id}").start()
+    return snapshot
+
+
+def scheduler_loop():
+    while True:
+        now = datetime.now().astimezone()
+        minute = now.strftime("%H:%M")
+        run_key = now.strftime("%Y-%m-%dT%H:%M")
+        for schedule in list_schedules():
+            if not schedule.get("enabled", True):
+                continue
+            if minute != schedule.get("time") or now.weekday() not in schedule.get("days", []):
+                continue
+            if schedule.get("last_run_key") == run_key:
+                continue
+            try:
+                trigger_schedule(schedule.get("id"), run_key)
+            except (ValueError, FileNotFoundError):
+                pass
+        time.sleep(15)
 
 
 def parse_player_list(result):
@@ -1082,6 +1303,11 @@ class Handler(BaseHTTPRequestHandler):
                     server["status"] = docker_status(server)
                     payload.append(server)
                 self.send_json(payload)
+            elif parts == ["api", "schedules"]:
+                payload = list_schedules()
+                for schedule in payload:
+                    schedule["running"] = schedule.get("id") in RUNNING_SCHEDULES
+                self.send_json(payload)
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "logs":
                 self.send_json(run_backend_action(read_server(parts[2]), "logs"))
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "plugins":
@@ -1133,6 +1359,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parts == ["api", "servers"]:
                 self.send_json(write_server(self.read_json()))
+            elif parts == ["api", "schedules"]:
+                self.send_json(save_schedule(self.read_json()))
+            elif len(parts) == 4 and parts[:2] == ["api", "schedules"] and parts[3] == "run":
+                self.send_json(trigger_schedule(parts[2]))
             elif parts == ["api", "ports", "check"]:
                 self.send_json({"warnings": port_warnings(self.read_json())})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "move-data-dir":
@@ -1242,6 +1472,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if len(parts) == 3 and parts[:2] == ["api", "servers"]:
                 self.send_json(delete_server(parts[2]))
+            elif len(parts) == 3 and parts[:2] == ["api", "schedules"]:
+                delete_schedule(parts[2])
+                self.send_json({"message": "Automatisierung geloescht."})
             elif len(parts) == 5 and parts[:2] == ["api", "servers"] and parts[3] == "manual-plugins":
                 delete_manual_plugin(read_server(parts[2]), urllib.parse.unquote(parts[4]))
                 self.send_json({"message": "Manuelles Plugin geloescht."})
@@ -1259,6 +1492,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     ensure_state()
+    recover_interrupted_schedules()
+    threading.Thread(target=scheduler_loop, daemon=True, name="minecraft-webui-scheduler").start()
     host = os.environ.get("MCDOCKER_WEBUI_HOST", "127.0.0.1")
     port = int(os.environ.get("MCDOCKER_WEBUI_PORT", "8088"))
     print(f"Minecraft Docker WebUI: http://{host}:{port}")

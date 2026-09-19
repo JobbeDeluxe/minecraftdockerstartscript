@@ -26,12 +26,16 @@ Hilfe-Dialog mit den wichtigsten Bedienhinweisen:
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Portpruefung gegen andere Profile und laufende Docker-Container
 - Deaktivierte Profile werden ausgegraut, als `deaktiviert` markiert und geben ihre Ports frei
+- Frontend-Sprachauswahl fuer Deutsch und Englisch
 - EULA, RAM, Version, Paper-Channel, RCON, Extra-Ports und Backup-Pfad direkt im Browser setzen
 - Versionsfeld mit manueller Eingabe plus Versionsliste/Refresh
 - Live-Logs und normales Logfenster
-- RCON-Konsole mit direktem Feedback und letzten Logzeilen
+- Freie RCON-Konsole fuer beliebige Minecraft-Befehle, Verlauf per Pfeiltasten und direkte Ausgabe
 - Spielerstatus links in der Serverliste und Spieleruebersicht per RCON `list`
 - RCON-Schnellaktionen fuer Teleport, Give, Kick, Ban und Pardon
+- Aufgeraeumte Bereiche fuer Uebersicht, Server erstellen, Einstellungen, Management und Automatisierung
+- Persistente Zeitplaene fuer Restart, Start, Stop, Backups, Plugin-Updates, Plugin-Update mit Restart und RCON-Befehle
+- Scheduler-Ziele fuer einen einzelnen Server oder alle aktiven Server, inklusive Wochentagen und letzter Ausgabe
 - `server.properties` Editor
 - `plugins.txt` Editor mit ungespeichert-Hinweis, Reload, Test-/Update-Workflow und Restart-Hinweis
 - Plugin-Updates aus Modrinth, GitHub Releases, Geyser-Endpunkten, Spigot/Fallbacks und direkten JAR-Links
@@ -86,7 +90,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.0.16
+v1.1.0
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -262,4 +266,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.0.16` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.1.0` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
