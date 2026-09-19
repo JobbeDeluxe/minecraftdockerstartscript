@@ -1,6 +1,6 @@
 # Minecraft Docker WebUI
 
-Version: `v1.0.16`
+Version: `v1.1.0`
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 
@@ -49,6 +49,7 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 
 ## Was aktuell funktioniert
 
+- Getrennte Bereiche fuer Uebersicht, Server erstellen, Einstellungen, Management und Automatisierung
 - Serverprofile anlegen und speichern
 - Docker-Container per Profil anwenden, starten, stoppen und entfernen, neu starten
 - Backup-Aktionen ueber den Backend-Runner ausloesen
@@ -57,12 +58,15 @@ MCDOCKER_WEBUI_HOST=0.0.0.0 MCDOCKER_WEBUI_PORT=8088 python3 webui/app.py
 - `plugins.txt` im Web bearbeiten und einfache Plugin-Updates ausloesen
 - Containerstatus, einfache Docker-Stats und Logs anzeigen
 - Spieleranzahl und einfache Spielerliste per RCON `list` anzeigen
+- Freie RCON-Konsole mit eigener Ausgabe, Befehlsverlauf und Vorlagen fuer Whitelist und Operator-Rechte
 - RCON-Schnellbefehle fuer `tp`, `give`, `kick`, `ban` und `pardon`
+- Persistente Zeitplaene fuer Restart, Start, Stop, Backup, Plugin-Updates und RCON-Befehle
 - BlueMap ueber die WebUI unter `/map/<server-id>/` proxien und einbetten
 - Profile deaktivieren, ohne Profil oder Datenordner zu loeschen
 - Lokale Serverdaten loeschen, ohne Profil oder zentrale Backups zu entfernen
 - Datenverzeichnis nachtraeglich verschieben und das Profil automatisch anpassen
 - Ungespeicherte Profil-Aenderungen mit `Lokale Version laden` verwerfen und neu aus dem lokalen WebUI-State laden
+- Frontend zwischen Deutsch und Englisch umschalten
 - Velocity-Netzwerkgruppen fuer Proxy und Backend-Server konfigurieren
 - Mehrere Server ueber unterschiedliche Containernamen, Datenverzeichnisse und Ports verwalten
 
@@ -201,6 +205,22 @@ Der Button `BlueMap oeffnen` und `BlueMap einbetten` laufen ueber den WebUI-Prox
 Dadurch reicht spaeter ein Reverse Proxy auf die WebUI; der Browser muss den BlueMap-Port nicht direkt erreichen.
 `BlueMap URL` ist der optionale Upstream fuer die WebUI, z. B. `http://127.0.0.1:8100/`. Wenn das Feld leer ist,
 nutzt die WebUI lokal `127.0.0.1:8100` oder den Host-Port aus einem Mapping wie `8123:8100/tcp`.
+
+## Automatisierung
+
+Zeitplaene werden unter `~/.minecraftdocker-webui/schedules.json` gespeichert und vom Python-Prozess
+im Hintergrund ausgefuehrt. Der Browser muss dafuer nicht geoeffnet bleiben; die WebUI selbst muss laufen.
+Als Uhrzeit gilt die lokale Zeitzone des Hosts.
+
+Ein Zeitplan kann einen einzelnen Server oder alle aktiven Server ansprechen. Unterstuetzte Aktionen sind:
+
+- Start, Stop und Restart
+- Backup
+- Plugins aktualisieren, optional direkt mit anschließendem Restart
+- beliebiger RCON-Befehl, zum Beispiel `say Neustart in 5 Minuten` oder `save-all`
+
+Deaktivierte Server werden beim Ziel `Alle aktiven Server` uebersprungen. Die letzte Ausgabe und der
+Erfolgsstatus bleiben am Zeitplan sichtbar. Nach Aenderung der Host-Zeitzone sollte die WebUI neu gestartet werden.
 
 ## Backup-Fortschritt
 
