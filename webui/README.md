@@ -1,6 +1,15 @@
 # Minecraft Docker WebUI
 
-Version: `v1.1.0`
+Version: `v1.2.3`
+
+Neu: automatischer Startschutz mit konsistentem Backup, Start-/Stabilitaetspruefung,
+Ruecksicherung nach fehlgeschlagenen Aenderungen und dauerhaftem letzten Bootfehlerprotokoll.
+Unter Management steht **Letztes fehlgeschlagenes Startprotokoll**; Startzeitlimit und Stabilitaetszeit
+sind im Profil einstellbar (Standard 600/120 Sekunden). Plugin-Updates halten den Server bis zur
+Startpruefung gestoppt. Automatischer Wiederanlauf nach Rollback ist fuer eindeutig fixierbare,
+zuvor erreichbare Paper-/Folia-Staende aktiv; sonst bleibt der Server nach der Datenruecksicherung
+mit Fehlerstatus gestoppt. Spaetere Betriebsfehler setzen keine Welten zurueck.
+Details, Speicherorte, Grenzen und Live-Test stehen im [Haupt-README](../README.md#startschutz-ab-v120).
 
 GitHub: <https://github.com/JobbeDeluxe/minecraftdockerstartscript>
 

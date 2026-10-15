@@ -1,4 +1,6 @@
 let servers = [];
+let serverSnapshotRequest = null;
+let serverStatusTimer = null;
 let selected = null;
 let liveTimer = null;
 let pluginsDirty = false;
@@ -713,6 +715,30 @@ Management accepts any Minecraft command, for example whitelist on, whitelist ad
 Automation
 Schedules can target one server or all active servers. Available actions are start, stop, restart, backup, plugin updates, plugin update with restart and arbitrary RCON commands. The host's local time is used; the WebUI must be running, but the browser can be closed.`;
 
+fields.push(["boot_timeout_seconds", "field.bootTimeout"], ["boot_stability_seconds", "field.bootStability"]);
+Object.assign(I18N.de, {
+  "action.refreshFailed": "Die Aktion wurde beantwortet, aber die Ansicht konnte nicht vollstaendig aktualisiert werden: {message}. Bitte Ansicht neu laden.",
+  "boot.unavailable": "Startprotokoll nicht verfuegbar. Moeglicherweise laeuft noch ein aelteres WebUI-Backend. Bitte den WebUI-Prozess neu starten und die Seite neu laden; der Startschutz ist so nicht bestaetigt.",
+  "boot.loadFailed": "Startprotokoll konnte nicht geladen werden: {message}",
+  "field.bootTimeout": "Startzeitlimit (Sekunden)", "field.bootStability": "Stabilitaetspruefung (Sekunden)",
+  "boot.title": "Letztes fehlgeschlagenes Startprotokoll", "boot.refresh": "Startprotokoll laden", "boot.empty": "Kein fehlgeschlagener Start gespeichert.",
+  "boot.hint": "Startschutz ist aktiv: Backup vor Aenderungen, Startpruefung und Stopp bei Neustartschleifen. Das letzte Fehlerprotokoll bleibt auch nach erfolgreichem Start erhalten.",
+  "state.error": "Fehler – Eingriff erforderlich", "state.rolled_back": "Zurueckgesetzt – vorheriger Stand laeuft", "state.preparing": "Startschutz-Backup", "state.updating": "Aenderung laeuft", "state.checking": "Startpruefung", "state.restoring": "Ruecksicherung", "state.pending": "Wartet auf geprueften Start",
+  "prompt.restartAfterPlugins": "Plugins aktualisiert. Der Server ist gestoppt und das Startschutz-Backup bleibt erhalten. Jetzt starten und pruefen?",
+  "message.pluginUpdateFailed": "Plugin-Update fehlgeschlagen. Ergebnis der Ruecksicherung und letztes Startprotokoll im Management pruefen."
+});
+Object.assign(I18N.en, {
+  "action.refreshFailed": "The action returned a result, but the view could not be fully refreshed: {message}. Please reload the view.",
+  "boot.unavailable": "Startup log unavailable. An older WebUI backend may still be running. Restart the WebUI process and reload the page; startup protection is not confirmed.",
+  "boot.loadFailed": "Could not load startup log: {message}",
+  "field.bootTimeout": "Startup timeout (seconds)", "field.bootStability": "Stability check (seconds)",
+  "boot.title": "Last failed startup log", "boot.refresh": "Load startup log", "boot.empty": "No failed startup recorded.",
+  "boot.hint": "Startup protection is active: backup before changes, startup verification and restart-loop protection. The last failure log survives successful starts.",
+  "state.error": "Error – intervention required", "state.rolled_back": "Rolled back – previous version running", "state.preparing": "Creating recovery backup", "state.updating": "Applying changes", "state.checking": "Checking startup", "state.restoring": "Restoring backup", "state.pending": "Awaiting verified startup",
+  "prompt.restartAfterPlugins": "Plugins updated. The server is stopped and its recovery backup is retained. Start and verify now?",
+  "message.pluginUpdateFailed": "Plugin update failed. Check the recovery result and last startup log in Management."
+});
+
 function readStoredLanguage() {
   try {
     return window.localStorage?.getItem("mdwLanguage") || null;
@@ -747,7 +773,12 @@ function el(tag, attrs = {}, children = []) {
 async function api(path, opt = {}) {
   const response = await fetch(path, { headers: { "content-type": "application/json" }, ...opt });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || t("message.requestFailed"));
+  if (!response.ok) {
+    const error = new Error(data.error || t("message.requestFailed"));
+    error.status = response.status;
+    error.path = path;
+    throw error;
+  }
   return data;
 }
 function setSelectorText(selector, key) {
@@ -810,6 +841,7 @@ function displayState(state, disabled) {
   if (disabled) return t("state.disabled");
   if (state === "missing") return t("state.missing");
   if (!state) return t("state.unknown");
+  if (I18N[lang][`state.${state}`]) return t(`state.${state}`);
   return state;
 }
 function updateProfileToggle() {
@@ -821,8 +853,43 @@ function updateProfileToggle() {
   button.textContent = disabled ? t("button.enable") : t("button.disable");
   button.className = disabled ? "primary" : "";
 }
+function fetchServerSnapshot() {
+  // Share one request: an older overlapping response cannot overwrite newer status.
+  if (!serverSnapshotRequest) {
+    serverSnapshotRequest = api("/api/servers").finally(() => { serverSnapshotRequest = null; });
+  }
+  return serverSnapshotRequest;
+}
+async function refreshServerStatuses() {
+  const snapshot = await fetchServerSnapshot();
+  const byId = new Map(snapshot.map(server => [server.id, server]));
+  servers = servers.map(server => {
+    const fresh = byId.get(server.id);
+    return fresh ? { ...server, status: fresh.status, disabled: fresh.disabled } : server;
+  });
+  // Do not redraw editors or reload files: unsaved user input must survive polling.
+  renderServers();
+  renderOverview();
+  updateProfileToggle();
+}
+function startServerStatusPolling() {
+  if (serverStatusTimer !== null) return;
+  const poll = async () => {
+    try {
+      if (!document.hidden) await refreshServerStatuses();
+    } catch {
+      // Keep the last known status; a transport failure is not a server failure.
+    } finally {
+      serverStatusTimer = setTimeout(poll, 5000);
+    }
+  };
+  serverStatusTimer = setTimeout(poll, 5000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshServerStatuses().catch(() => {});
+  });
+}
 async function loadServers() {
-  servers = await api("/api/servers");
+  servers = await fetchServerSnapshot();
   if (!servers.some(server => server.id === selected)) selected = servers[0]?.id || null;
   renderServers();
   renderEditor();
@@ -840,6 +907,7 @@ function selectServer(serverId) {
   selected = serverId;
   setConfigDirty(false);
   setActionStatus("");
+  setRefreshStatus("");
   renderServers();
   renderEditor();
   renderNetworkSummary();
@@ -917,6 +985,15 @@ function renderEditor() {
     const input = el((key === "type" || key === "network_role") ? "select" : "input", { name: key, value: server[key] || "" });
     if (key === "version") input.setAttribute("list", "versionOptions");
     if (key === "rcon_password") input.type = "password";
+    if (key.startsWith("boot_")) {
+      if (server[key] == null || String(server[key]).trim() === "") {
+        input.value = key === "boot_timeout_seconds" ? "600" : "120";
+      }
+      input.type = "number";
+      input.min = key === "boot_timeout_seconds" ? "30" : "10";
+      input.max = key === "boot_timeout_seconds" ? "7200" : "600";
+      input.required = true;
+    }
     if (key === "type") {
       for (const option of serverTypes) {
         const node = el("option", { value: option, text: option });
@@ -949,9 +1026,9 @@ function renderEditor() {
   form.append(el("div", { class: "checks full" }, [
     checkbox("eula_accepted", t("check.eula"), server.eula_accepted),
     checkbox("rcon_enabled", t("check.rcon"), server.rcon_enabled),
-    checkbox("backup_before_apply", t("check.backupBefore"), server.backup_before_apply),
     checkbox("start_after_apply", t("check.startAfter"), server.start_after_apply ?? true)
   ]));
+  form.append(el("p", { class: "muted full", text: t("boot.hint") }));
   const saveButton = el("button", { class: "primary", type: "submit", text: t("button.save") });
   const reloadButton = el("button", { type: "button", text: t("button.reloadProfile") });
   reloadButton.onclick = () => reloadCurrentProfile();
@@ -976,7 +1053,7 @@ function formData() {
   const form = new FormData($("editor"));
   const data = {};
   for (const [key] of fields) data[key] = form.get(key);
-  for (const key of ["eula_accepted", "rcon_enabled", "backup_before_apply", "start_after_apply"]) data[key] = form.get(key) === "on";
+  for (const key of ["eula_accepted", "rcon_enabled", "start_after_apply"]) data[key] = form.get(key) === "on";
   data.disabled = !!current().disabled;
   return data;
 }
@@ -1160,9 +1237,10 @@ if ($("languageSelect")) $("languageSelect").onchange = event => setLanguage(eve
 const liveActionLogActions = new Set(["apply", "backup", "start", "restart"]);
 const actionLabelKeys = { apply: "button.apply", start: "button.start", stop: "button.stop", restart: "button.restart", disable: "button.disable", enable: "button.enable", backup: "button.backup", "delete-data": "button.deleteData" };
 function actionLabel(action) { return t(actionLabelKeys[action] || action); }
-async function runProfileAction(action) {
+async function runProfileAction(action, targetServerId = selected) {
   let note = "";
   let poll = null;
+  setRefreshStatus("");
   try {
     if (action === "delete-data") {
       const data = formData();
@@ -1170,11 +1248,12 @@ async function runProfileAction(action) {
       const answer = prompt(t("prompt.deleteData", { dataDir: data.data_dir || "(leer)", phrase }));
       if (answer !== phrase) return;
     }
-    if (configDirty) {
+    if (configDirty && selected === targetServerId) {
       await saveCurrentProfile();
+      targetServerId = selected;
       note = t("message.profileSaved");
     }
-    const serverId = selected;
+    const serverId = targetServerId;
     const label = actionLabel(action);
     setActionStatus(t("message.actionRunning", { label }), "info");
     showOutput(`${note}${t("message.actionRunning", { label })}`);
@@ -1203,7 +1282,12 @@ async function runProfileAction(action) {
       const details = (result.blockers || []).map(translateWarning).join("\n");
       setActionStatus([heading, details].filter(Boolean).join("\n\n"), "error");
     }
-    await loadServers();
+    try {
+      await loadServers();
+    } catch (refreshError) {
+      // Refresh errors must never replace the authoritative action result.
+      setRefreshStatus(t("action.refreshFailed", { message: refreshError.message }));
+    }
   } catch (err) {
     if (poll) clearInterval(poll);
     setActionStatus(err.message, "error");
@@ -1228,6 +1312,7 @@ $("deleteServer").onclick = async () => {
   $("result").textContent = [result.message || t("message.serverDeleted", { id: target }), ...(result.details || [])].join("\n");
 };
 $("refreshLogs").onclick = () => loadLogs();
+$("refreshBootLog").onclick = () => loadBootLog();
 $("liveLogs").onclick = () => {
   const button = $("liveLogs");
   if (liveTimer) {
@@ -1335,6 +1420,12 @@ function setActionStatus(message, type = "info") {
   box.className = `action-status ${type}`;
   box.hidden = !message;
 }
+function setRefreshStatus(message) {
+  const box = $("refreshStatus");
+  if (!box) return;
+  box.textContent = message || "";
+  box.hidden = !message;
+}
 function waitPaint() { return new Promise(resolve => setTimeout(resolve, 80)); }
 $("savePlugins").onclick = async () => savePlugins();
 async function savePlugins() {
@@ -1346,38 +1437,45 @@ async function savePlugins() {
 $("reloadPlugins").onclick = async () => {
   if (!pluginsDirty || confirm(t("prompt.discardPlugins"))) await loadPlugins();
 };
-$("updatePlugins").onclick = async () => {
-  if (pluginsDirty) {
-    const save = confirm(t("prompt.updatePluginsUnsaved"));
-    if (save) await savePlugins();
-    else await loadPlugins();
-  }
-  showOutput(t("message.pluginUpdateRunning"));
-  const poll = setInterval(async () => {
-    try {
-      const log = await api(`/api/servers/${selected}/action-log`);
-      if (log.content) showOutput(`${t("message.pluginUpdateRunning")}\n\n${log.content}`);
-    } catch {}
-  }, 1000);
-  let result;
+$("updatePlugins").onclick = updatePlugins;
+async function updatePlugins() {
+  if (!selected) return;
+  const serverId = selected;
+  let poll = null;
   try {
-    result = await api(`/api/servers/${selected}/action`, { method: "POST", body: JSON.stringify({ action: "plugins" }) });
-  } finally {
+    if (pluginsDirty) {
+      const save = confirm(t("prompt.updatePluginsUnsaved"));
+      if (save) await savePlugins();
+      else await loadPlugins();
+    }
+    showOutput(t("message.pluginUpdateRunning"));
+    const refreshLog = async () => {
+      try {
+        const log = await api(`/api/servers/${serverId}/action-log`);
+        if (poll !== null && selected === serverId && log.content) showOutput(`${t("message.pluginUpdateRunning")}\n\n${log.content}`);
+      } catch {}
+    };
+    poll = setInterval(refreshLog, 1000);
+    const result = await api(`/api/servers/${serverId}/action`, { method: "POST", body: JSON.stringify({ action: "plugins" }) });
     clearInterval(poll);
+    poll = null;
+    showOutput(`$ plugins\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
+    await refreshServerStatuses().catch(() => {});
+    if (result.ok && confirm(t("prompt.restartAfterPlugins"))) {
+      await runProfileAction("restart", serverId);
+    } else if (!result.ok) {
+      showOutput(`${$("result").textContent}\n\n${t("message.pluginUpdateFailed")}`);
+    }
+  } catch (error) {
+    showOutput(error.message);
+  } finally {
+    if (poll !== null) clearInterval(poll);
+    await refreshServerStatuses().catch(() => {});
+    if (selected === serverId) {
+      await Promise.allSettled([loadManualPlugins(), loadInstalledPlugins(), loadBootLog()]);
+    }
   }
-  showOutput(`$ plugins\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
-  await loadManualPlugins();
-  await loadInstalledPlugins();
-  await waitPaint();
-  if (result.ok && confirm(t("prompt.restartAfterPlugins"))) {
-    showOutput(`${$("result").textContent}\n\n${t("message.restartRunning")}`);
-    const restart = await api(`/api/servers/${selected}/action`, { method: "POST", body: JSON.stringify({ action: "restart" }) });
-    showOutput(`${$("result").textContent}\n\n$ restart\nexit ${restart.code}\n\n${restart.stdout}\n${restart.stderr}`);
-    await loadServers();
-  } else if (!result.ok) {
-    showOutput(`${$("result").textContent}\n\n${t("message.pluginUpdateFailed")}`);
-  }
-};
+}
 $("saveProperties").onclick = async () => saveProperties();
 async function saveProperties() {
   const text = $("serverProperties").value;
@@ -1445,7 +1543,20 @@ $("importBackup").onclick = async () => {
 };
 async function refreshDetails() {
   if (!selected) return;
-  await Promise.all([loadLogs(), loadPlugins(), loadProperties(), loadManualPlugins(), loadInstalledPlugins(), loadFiles(), loadBackups(), loadPlayers(), checkPorts()]);
+  await Promise.all([loadLogs(), loadBootLog(), loadPlugins(), loadProperties(), loadManualPlugins(), loadInstalledPlugins(), loadFiles(), loadBackups(), loadPlayers(), checkPorts()]);
+}
+async function loadBootLog() {
+  const serverId = selected;
+  try {
+    const result = await api(`/api/servers/${serverId}/boot-log`);
+    if (selected !== serverId) return;
+    $("bootState").textContent = [displayState(result.state, false), result.reason, result.failure_at].filter(Boolean).join(" · ");
+    $("bootLog").textContent = result.content || t("boot.empty");
+  } catch (error) {
+    if (selected !== serverId) return;
+    $("bootState").textContent = error.status === 404 ? t("boot.unavailable") : t("boot.loadFailed", { message: error.message });
+    $("bootLog").textContent = "";
+  }
 }
 async function loadLogs() {
   const result = await api(`/api/servers/${selected}/logs`);
@@ -1861,3 +1972,5 @@ applyLanguageStatic();
 $("rconOutput").textContent = t("rcon.ready");
 const initialView = window.location.hash.slice(1) || "overview";
 loadServers().then(() => showView(initialView, false)).catch(error => $("result").textContent = error.message);
+
+startServerStatusPolling();

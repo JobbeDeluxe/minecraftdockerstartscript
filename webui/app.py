@@ -7,23 +7,28 @@ import re
 import shutil
 import shlex
 import secrets
+import signal
 import socket
 import subprocess
 import tempfile
 import threading
 import time
+import sys
+from functools import wraps
+from contextlib import ExitStack
 import urllib.parse
 import urllib.request
 import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from boot_guard import BootGuard
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
 ASSET_DIR = ROOT / "docs" / "assets"
-APP_VERSION = "v1.1.0"
+APP_VERSION = "v1.2.3"
 PUBLIC_ASSETS = {
     "minecraft-docker-webui-spigot-icon-96.png",
     "minecraft-docker-webui-icon-128.png",
@@ -58,6 +63,9 @@ DEFAULT_SERVER = {
     "docker_image": "itzg/minecraft-server",
     "eula_accepted": False,
     "backup_before_apply": False,
+    "boot_timeout_seconds": 600,
+    "boot_stability_seconds": 120,
+    "pinned_server_jar": "",
     "start_after_apply": True,
     "disabled": False,
     "rcon_enabled": True,
@@ -92,13 +100,21 @@ def server_path(server_id):
     return SERVER_DIR / f"{server_id}.json"
 
 
+def apply_boot_defaults(config):
+    for key in ("boot_timeout_seconds", "boot_stability_seconds"):
+        value = config.get(key)
+        if value is None or isinstance(value, str) and not value.strip():
+            config[key] = DEFAULT_SERVER[key]
+    return config
+
+
 def read_server(server_id):
     path = server_path(server_id)
     if not path.exists():
         raise FileNotFoundError(server_id)
     data = DEFAULT_SERVER.copy()
     data.update(json.loads(path.read_text(encoding="utf-8-sig")))
-    return data
+    return apply_boot_defaults(data)
 
 
 def is_disabled(config):
@@ -116,6 +132,18 @@ def normalize_memory_value(value):
     return value
 
 
+def profile_mutation(function):
+    @wraps(function)
+    def wrapped(value, *args, **kwargs):
+        config = value if isinstance(value, dict) else {"id": value}
+        if not config.get("id"):
+            return function(value, *args, **kwargs)
+        with GUARD.exclusive(config):
+            return function(value, *args, **kwargs)
+    return wrapped
+
+
+@profile_mutation
 def write_server(data):
     server_id = str(data.get("id", "")).strip()
     if not server_id:
@@ -132,9 +160,18 @@ def write_server(data):
     merged = DEFAULT_SERVER.copy()
     merged.update(existing)
     merged.update(data)
+    apply_boot_defaults(merged)
+    for key, low, high in (("boot_timeout_seconds", 30, 7200), ("boot_stability_seconds", 10, 600)):
+        merged[key] = int(merged[key])
+        if not low <= merged[key] <= high:
+            raise ValueError(f"{key}: erlaubt sind {low} bis {high} Sekunden")
+    if existing and any(merged.get(key) != existing.get(key) for key in ("version", "type", "docker_image")) and "pinned_server_jar" not in data:
+        merged["pinned_server_jar"] = ""
     merged["id"] = server_id
     merged["container_name"] = merged.get("container_name") or f"mc-{server_id}"
     merged["data_dir"] = merged.get("data_dir") or f"/opt/minecraft/{server_id}"
+    if existing and GUARD.read(merged).get("pending") and any(str(existing.get(key)) != str(merged.get(key)) for key in ("data_dir", "container_name")):
+        raise ValueError("Startschutz-Backup ist vorgemerkt. Vor dem Aendern von Datenordner/Container zuerst Start pruefen.")
     for key in ("memory", "init_memory", "max_memory"):
         merged[key] = normalize_memory_value(merged.get(key, ""))
     merged["disabled"] = is_disabled(merged)
@@ -210,6 +247,7 @@ def delete_data_dir(config):
     return [f"Datenordner geloescht: {target}"]
 
 
+@profile_mutation
 def delete_server(server_id):
     INIT_MARKER.parent.mkdir(parents=True, exist_ok=True)
     INIT_MARKER.write_text("ok\n", encoding="utf-8")
@@ -217,6 +255,7 @@ def delete_server(server_id):
     details = []
     details.extend(remove_container(config.get("container_name")))
     details.extend(delete_data_dir(config))
+    GUARD.save(config, state="stopped", pending=False, checkpoint=None, reason="Server geloescht.")
     path = server_path(server_id)
     if path.exists():
         path.unlink()
@@ -224,16 +263,21 @@ def delete_server(server_id):
     return {"message": f"Server {server_id} geloescht.", "details": details}
 
 
+@profile_mutation
 def delete_local_data(config):
     details = []
     details.extend(remove_container(config.get("container_name")))
     details.extend(delete_data_dir(config))
+    GUARD.save(config, state="stopped", pending=False, checkpoint=None, reason="Lokale Daten geloescht.")
     details.append("Profil bleibt erhalten. Start oder Anwenden legt Container und Daten neu an.")
     return {"ok": True, "code": 0, "stdout": "\n".join(details), "stderr": ""}
 
 
+@profile_mutation
 def move_data_dir(server_id, target_raw, profile_update=None):
     config = read_server(server_id)
+    if GUARD.read(config).get("pending"):
+        raise ValueError("Zuerst den vorgemerkten Start pruefen, bevor Daten verschoben werden.")
     source = resolve_data_dir_path(config.get("data_dir"))
     target = resolve_data_dir_path(target_raw)
     if source == target:
@@ -263,6 +307,7 @@ def move_data_dir(server_id, target_raw, profile_update=None):
     updated["id"] = server_id
     updated["data_dir"] = str(target)
     saved = write_server(updated)
+    GUARD.save(saved, state="stopped", pending=False, checkpoint=None, reason="Datenordner verschoben.")
     details.append("Profil wurde auf den neuen Datenordner aktualisiert.")
     return {"message": "Datenverzeichnis verschoben.", "details": details, "server": saved}
 
@@ -274,7 +319,7 @@ def list_servers():
         try:
             data = DEFAULT_SERVER.copy()
             data.update(json.loads(path.read_text(encoding="utf-8-sig")))
-            out.append(data)
+            out.append(apply_boot_defaults(data))
         except json.JSONDecodeError:
             pass
     return out
@@ -282,8 +327,17 @@ def list_servers():
 
 def run_command(args, timeout=60):
     try:
-        proc = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
-        return {"ok": proc.returncode == 0, "code": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr}
+        proc = subprocess.Popen(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name == "posix")
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
+            stdout, stderr = proc.communicate()
+            return {"ok": False, "code": 124, "stdout": stdout, "stderr": stderr + f"\nCommand timed out after {timeout}s"}
+        return {"ok": proc.returncode == 0, "code": proc.returncode, "stdout": stdout, "stderr": stderr}
     except FileNotFoundError as exc:
         return {"ok": False, "code": 127, "stdout": "", "stderr": str(exc)}
     except subprocess.TimeoutExpired as exc:
@@ -295,12 +349,16 @@ def docker_status(config):
         return {"state": "deaktiviert", "running": False, "disabled": True}
     result = run_command(["docker", "container", "inspect", config.get("container_name", ""), "--format", "{{json .State}}"], timeout=15)
     if not result["ok"]:
-        return {"state": "missing", "running": False}
+        guard = GUARD.read(config)
+        phase = guard.get("state")
+        return {"state": phase if phase in {"error", "preparing", "updating", "checking", "restoring", "pending"} else "missing", "running": False, "boot_guard": guard.get("reason", "")}
     try:
         state = json.loads(result["stdout"])
     except json.JSONDecodeError:
         return {"state": "unknown", "running": False}
-    return {"state": state.get("Status", "unknown"), "running": bool(state.get("Running")), "started_at": state.get("StartedAt")}
+    guard = GUARD.read(config)
+    phase = guard.get("state")
+    return {"state": phase if phase in {"error", "rolled_back", "preparing", "updating", "checking", "restoring", "pending"} else state.get("Status", "unknown"), "running": bool(state.get("Running")), "started_at": state.get("StartedAt"), "boot_guard": guard.get("reason", "")}
 
 
 def parse_ports(config):
@@ -809,6 +867,13 @@ def configure_paper_global(data_dir, secret, proxy_online_mode=True):
 
 
 def configure_velocity_network(seed_server_id):
+    with ExitStack() as locks:
+        for server in list_servers():
+            locks.enter_context(GUARD.exclusive(server))
+        return _configure_velocity_network(seed_server_id)
+
+
+def _configure_velocity_network(seed_server_id):
     seed = read_server(seed_server_id)
     group = str(seed.get("network_group") or "").strip()
     if not group:
@@ -905,9 +970,10 @@ def configure_velocity_network(seed_server_id):
 
 def read_action_log(config, lines=200):
     path = Path(config.get("data_dir", "")) / "update_log.txt"
-    if not path.exists():
-        return ""
-    content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    content = path.read_text(encoding="utf-8", errors="replace").splitlines() if path.exists() else []
+    guard_log = GUARD.directory(config) / "action.log"
+    if guard_log.exists():
+        content += guard_log.read_text(encoding="utf-8", errors="replace").splitlines()
     return "\n".join(content[-lines:])
 
 
@@ -921,6 +987,7 @@ def config_env(config):
         "TYPE": config.get("type", "PAPER"),
         "VERSION": config.get("version", "LATEST"),
         "PAPER_CHANNEL": config.get("paper_channel", "default"),
+        "PINNED_SERVER_JAR": config.get("pinned_server_jar", ""),
         "HOST_PORT": config.get("host_port", "25565"),
         "EXTRA_PORTS": config.get("extra_ports", ""),
         "DOCKER_IMAGE": config.get("docker_image", "itzg/minecraft-server"),
@@ -948,7 +1015,7 @@ def write_temp_env(config):
 
 
 def run_backend_action(config, action):
-    if action in {"apply", "start", "restart"}:
+    if action in {"apply", "start", "restart", "plugins-restart"}:
         blockers = blocking_action_warnings(config)
         if blockers:
             port_blockers = [
@@ -983,6 +1050,10 @@ def run_backend_action(config, action):
                 "message": blockers[0],
                 "blockers": blockers,
             }
+    return GUARD.run(config, action)
+
+
+def _run_backend_action(config, action):
     env_file = write_temp_env(config)
     try:
         return run_command(["bash", str(BACKEND), "--config", env_file, "--action", action], timeout=3600)
@@ -1119,11 +1190,12 @@ def execute_schedule(schedule):
         return False, "Keine aktiven Server fuer diese Automatisierung gefunden."
     overall_ok = True
     for config in targets:
+        config = config | {"_scheduled": True}
         server_name = config.get("name") or config.get("id")
         action = schedule.get("action")
         steps = []
         if action == "plugins-restart":
-            steps = [("plugins", None), ("restart", None)]
+            steps = [("plugins-restart", None)]
         elif action == "rcon":
             steps = [("rcon", schedule.get("command", ""))]
         else:
@@ -1347,6 +1419,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"content": read_server_properties(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "action-log":
                 self.send_json({"content": read_action_log(read_server(parts[2]))})
+            elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "boot-log":
+                config = read_server(parts[2])
+                state = GUARD.read(config)
+                path = GUARD.directory(config) / "last-failed-boot.log"
+                self.send_json({"state": state.get("state", ""), "reason": state.get("reason", ""), "failure_at": state.get("failure_at", ""), "content": path.read_text(encoding="utf-8") if path.exists() else ""})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "ports":
                 self.send_json({"warnings": port_warnings(read_server(parts[2]))})
             elif len(parts) == 4 and parts[:2] == ["api", "servers"] and parts[3] == "backups":
@@ -1385,6 +1462,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, 500)
 
     def do_POST(self):
+        parts = [part for part in urllib.parse.urlparse(self.path).path.split("/") if part]
+        if len(parts) >= 3 and parts[:2] == ["api", "servers"]:
+            try:
+                with GUARD.exclusive({"id": parts[2]}):
+                    self._do_POST()
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 409)
+        else:
+            self._do_POST()
+
+    def _do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         parts = [part for part in parsed.path.split("/") if part]
         try:
@@ -1498,6 +1586,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, 500)
 
     def do_DELETE(self):
+        parts = [part for part in urllib.parse.urlparse(self.path).path.split("/") if part]
+        if len(parts) >= 3 and parts[:2] == ["api", "servers"]:
+            try:
+                with GUARD.exclusive({"id": parts[2]}):
+                    self._do_DELETE()
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, 409)
+        else:
+            self._do_DELETE()
+
+    def _do_DELETE(self):
         parsed = urllib.parse.urlparse(self.path)
         parts = [part for part in parsed.path.split("/") if part]
         try:
@@ -1521,10 +1620,14 @@ class Handler(BaseHTTPRequestHandler):
         print("%s - %s" % (self.address_string(), fmt % args))
 
 
+GUARD = BootGuard(sys.modules[__name__])
+
+
 def main():
     ensure_state()
     recover_interrupted_schedules()
     threading.Thread(target=scheduler_loop, daemon=True, name="minecraft-webui-scheduler").start()
+    threading.Thread(target=GUARD.monitor_loop, daemon=True, name="minecraft-boot-guard").start()
     host = os.environ.get("MCDOCKER_WEBUI_HOST", "127.0.0.1")
     port = int(os.environ.get("MCDOCKER_WEBUI_PORT", "8088"))
     print(f"Minecraft Docker WebUI: http://{host}:{port}")

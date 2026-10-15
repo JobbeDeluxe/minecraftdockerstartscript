@@ -90,7 +90,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.1.0
+v1.2.3
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -229,6 +229,70 @@ Wenn das Datenverzeichnis nachtraeglich korrigiert werden muss, kann der neue Pf
 
 ## Backups und Import
 
+### Startschutz ab v1.2.0
+
+Vor **Anwenden, Start, Restart und Plugin-Updates** stoppt die WebUI den Server und erstellt
+automatisch einen konsistenten Wiederherstellungspunkt. Das bisher optionale Kontrollfeld
+`Backup vorher` entfaellt. Ein Backupfehler bricht die Aenderung ab und laesst den Server gestoppt.
+Bei Plugin-Updates ohne direkten Restart bleibt er ebenfalls gestoppt; der Wiederherstellungspunkt
+bleibt bis zum anschliessenden Start/Restart vorgemerkt, auch ueber einen WebUI-Neustart hinweg.
+
+Ein Start gilt erst als erfolgreich, wenn der Minecraft-Healthcheck oder eine Minecraft-Statusabfrage
+antwortet und die Stabilitaetspruefung bestanden ist. Standard: **600 Sekunden Startzeitlimit und
+120 Sekunden Stabilitaet**, pro Profil unter Einstellungen aenderbar. Erkannte Plugin-Ladefehler
+(z. B. WorldEdit `NoCapablePlatformException`) lassen die Pruefung auch bei erreichbarem Server scheitern.
+Waehrend dieser Pruefung ist der automatische Docker-Neustart deaktiviert; schon der erste
+Absturz bricht die Aenderung ab.
+
+Bei einem Fehlstart sichert die WebUI das Fehlerprotokoll ausserhalb des Datenordners und stellt
+das komplette Datenverzeichnis wieder her. Neue fehlerhafte Dateien bleiben dadurch nicht zwischen
+alten Plugins liegen. Der fehlgeschlagene Datenstand bleibt daneben als `DATENORDNER.failed-ZEITSTEMPEL`
+zur manuellen Diagnose erhalten. Ausgeschlossene lokale `backups` werden beim Austausch uebernommen.
+
+**Automatischer Wiederanlauf nach Ruecksicherung:** derzeit fuer vorher erreichbare Paper-/Folia-Server
+mit lokal vorhandener, ueber `.paper.env` eindeutig bestimmbarer JAR und fester Minecraft-Version.
+Die Ruecksicherung verwendet diese JAR und die bisherige Docker-Image-ID. Profilwerte werden aus der
+tatsaechlichen Containerkonfiguration rekonstruiert; ein zuvor gespeichertes neues Profil ersetzt
+dadurch nicht versehentlich die alten Laufzeitwerte. Nach einem Rollback bleiben Version, JAR und Image
+fixiert. Fuer einen spaeteren Versionswechsel Version/Image im Profil bewusst aendern.
+Bei anderen Plattformen oder fehlendem nachweislich funktionierendem Startstand werden die Daten
+zurueckgesichert und der Server bleibt mit Fehlerstatus gestoppt. Auch ein fehlgeschlagener
+Ruecksicherungsstart bleibt gestoppt, ohne weitere automatische Versuche.
+
+Im normalen Betrieb begrenzt Docker Neustarts mit `on-failure:3`; solange die WebUI laeuft,
+stoppt zusaetzlich ein Hintergrundwaechter bei drei Neustarts in fuenf Minuten oder anhaltend fehlender
+Erreichbarkeit. Bestehende Container werden ebenfalls uebernommen. **Spaetere Betriebsfehler spielen
+kein altes Weltbackup ein**, damit Spielfortschritt erhalten bleibt. Zeitplaene duerfen einen Server
+im Fehler- oder Rollbackstatus nicht automatisch erneut aktualisieren/starten; zuerst manuell pruefen.
+Nach einem Docker-/Host-Neustart startet `on-failure` die Container nicht automatisch: Start ueber die
+WebUI ausloesen. Die volle Ueberwachung setzt einen laufenden WebUI-Prozess voraus, keinen offenen Browser.
+
+Unter **Management → Letztes fehlgeschlagenes Startprotokoll** stehen Fehler, Zeitpunkt und Bootlog
+(bis zu 4000 Docker-Logzeilen je Versuch). Ein erfolgreicher Start loescht dieses Protokoll nicht.
+Dateien liegen unter `MCDOCKER_WEBUI_HOME/boot-guard/SERVER-ID/` bzw.
+`~/.minecraftdocker-webui/boot-guard/SERVER-ID/`. Das umfasst `state.json`, `action.log` und
+`last-failed-boot.log`. Wiederherstellungspunkte liegen als unkomprimierte `data.tar` mit privater
+`checkpoint.json` unter `BACKUP_ROOT/boot-guard/SERVER-ID/checkpoint-*/`.
+Der letzte Punkt bleibt bis zum naechsten vollstaendig erstellten Punkt erhalten; er ersetzt kein
+regulaeres Langzeitbackup. Fuer Archiv und Ruecksicherung muss ausreichend freier Speicher vorhanden
+sein; der Datenordner und sein uebergeordneter Ordner muessen beschreibbar sein. Fehlgeschlagene
+Datenstaende werden bewusst nicht automatisch geloescht.
+
+Direkte Datei-/ZIP-Uploads und manuelle Plugin-Aenderungen **vor** dem Klick auf Start/Anwenden
+sind bereits Teil des dann erstellten Backups. Fuer solche manuellen Eingriffe vorher ein regulaeres
+Backup erstellen. Der interaktive CLI-Modus in `start_minecraft.sh` wird nicht vom WebUI-Startschutz betreut.
+
+Live-Test: WebUI-Prozess mit dem aktualisierten Code neu starten, Browser neu laden und im Header
+`v1.2.3` pruefen. Zuerst einen funktionierenden Paper-Server anwenden; die Aktion wartet auf die
+Startpruefung. Fehlstarts/Rollback anschliessend auf einem Testprofil durch ein inkompatibles
+Plugin-Update pruefen. Issue: [Startschutz und Fehlerprotokoll #14](https://github.com/JobbeDeluxe/minecraftdockerstartscript/issues/14).
+
+Lokale Regressionstests (Docker wird simuliert, Archive und HTTP-Endpunkt werden getestet):
+
+```bash
+python3 -m unittest discover -s webui -p 'test_*.py' -v
+```
+
 Backups werden zentral abgelegt und enthalten den Server-/Containernamen im Dateinamen. Dadurch kann ein alter Server geloescht und spaeter wieder als neues Profil importiert werden.
 
 Waehrend ein Backup laeuft, pollt die WebUI das Aktionslog. Das Backend schreibt alle 5 Sekunden
@@ -266,4 +330,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.1.0` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.2.3` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
