@@ -59,6 +59,7 @@ MAX_MEMORY="${MAX_MEMORY:-}"
 TYPE="${TYPE:-PAPER}"
 VERSION="${VERSION:-LATEST}"
 PAPER_CHANNEL="${PAPER_CHANNEL:-default}"
+PINNED_SERVER_JAR="${PINNED_SERVER_JAR:-}"
 DO_BACKUP="${DO_BACKUP:-nein}"
 DO_START_DOCKER="${DO_START_DOCKER:-ja}"
 EXTRA_PORTS="${EXTRA_PORTS:-}"
@@ -185,9 +186,10 @@ stop_server() {
         return 0
     fi
     log "Stoppe Server ${SERVER_NAME}..."
-    docker container stop "$SERVER_NAME" >/dev/null 2>&1 || true
+    docker container update --restart=no "$SERVER_NAME" >/dev/null
+    docker container stop --time 60 "$SERVER_NAME" >/dev/null
     log "Entferne Docker-Container ${SERVER_NAME}; Profil und Daten bleiben erhalten."
-    docker container rm -f "$SERVER_NAME" >/dev/null 2>&1 || true
+    docker container rm "$SERVER_NAME" >/dev/null
     log "Container ${SERVER_NAME} wurde gestoppt und geloescht. Start oder Anwenden erstellt ihn neu."
 }
 
@@ -196,6 +198,7 @@ desired_container_config_hash() {
     {
         printf "DATA_DIR=%s\n" "$DATA_DIR"
         printf "DOCKER_IMAGE=%s\n" "$DOCKER_IMAGE"
+        printf "PINNED_SERVER_JAR=%s\n" "$PINNED_SERVER_JAR"
         printf "HOST_PORT=%s\n" "$HOST_PORT"
         printf "EXTRA_PORTS=%s\n" "$EXTRA_PORTS"
         is_proxy_type && printf "GAME_PORT=%s\n" "$(container_game_port)"
@@ -415,7 +418,7 @@ apply_container() {
         -e TZ=Europe/Berlin
         -e MEMORY="$MEMORY"
         -e TYPE="$TYPE"
-        --restart always
+        --restart no
     )
     if [[ -n "${DOCKER_NETWORK:-}" ]]; then
         docker_args+=(--network "$DOCKER_NETWORK")
@@ -443,6 +446,9 @@ apply_container() {
     fi
     if [[ "${TYPE^^}" == "PAPER" && -n "${PAPER_CHANNEL:-}" ]]; then
         docker_args+=(-e "PAPER_CHANNEL=$PAPER_CHANNEL")
+    fi
+    if [[ -n "$PINNED_SERVER_JAR" ]]; then
+        docker_args+=(-e "PAPER_CUSTOM_JAR=$PINNED_SERVER_JAR" -e SKIP_DOWNLOAD_DEFAULTS=true)
     fi
 
     if [[ "$RCON_ENABLED" == "ja" ]]; then
