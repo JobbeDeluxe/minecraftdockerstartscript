@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "webui" / "backend.sh"
 STATIC_DIR = ROOT / "webui" / "static"
 ASSET_DIR = ROOT / "docs" / "assets"
-APP_VERSION = "v1.2.3"
+APP_VERSION = "v1.3.1"
 PUBLIC_ASSETS = {
     "minecraft-docker-webui-spigot-icon-96.png",
     "minecraft-docker-webui-icon-128.png",
@@ -1394,6 +1394,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             elif parsed.path == "/static/style.css":
                 self.send_file(STATIC_DIR / "style.css", "text/css; charset=utf-8")
+            elif parsed.path == "/static/items.json":
+                self.send_file(STATIC_DIR / "items.json", "application/json; charset=utf-8")
             elif parsed.path == "/static/app.js":
                 self.send_file(STATIC_DIR / "app.js", "text/javascript; charset=utf-8")
             elif len(parts) == 2 and parts[0] == "assets" and parts[1] in PUBLIC_ASSETS:

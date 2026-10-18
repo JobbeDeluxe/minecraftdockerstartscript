@@ -407,7 +407,12 @@ class AppIntegrationTest(unittest.TestCase):
                 self.assertEqual(payload["state"], "error")
                 self.assertNotIn("checkpoint", payload)
             with urllib.request.urlopen(base + "/api/version") as response:
-                self.assertEqual(json.load(response)["version"], "v1.2.3")
+                self.assertEqual(json.load(response)["version"], "v1.3.1")
+            with urllib.request.urlopen(base + "/static/items.json") as response:
+                catalog = json.load(response)
+                diamond = next(item for item in catalog["items"] if item["id"] == "minecraft:diamond")
+                self.assertEqual(diamond["de"], "Diamant")
+                self.assertTrue(diamond["icon"].startswith("data:image/png;base64,"))
         finally:
             server.shutdown()
             thread.join()

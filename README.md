@@ -90,7 +90,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.2.3
+v1.3.1
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -157,6 +157,23 @@ und Portpruefung auf. `Anwenden`, `Start` oder `Restart` aktiviert ein deaktivie
 erfolgreicher Aktion ebenfalls automatisch wieder.
 
 ## Spieler und RCON
+
+Ab v1.3.1 uebernimmt die Online-Spielerauswahl den Namen automatisch in das bearbeitbare
+Feld **Spieler / Empfaenger**. **Name kopieren** kopiert ihn in die Zwischenablage; auf
+HTTP-Verbindungen ohne Clipboard-Unterstuetzung bleibt der Name zum Kopieren mit Strg+C
+markiert. **Als TP-Ziel** uebernimmt ihn in das Ziel-Feld. Danach den zu teleportierenden
+Spieler als Empfaenger auswaehlen und **TP zu Spieler** klicken. Manuelle Namen haben Vorrang
+und bleiben beim Aktualisieren der Spielerliste erhalten.
+
+**Item mit Icon auswaehlen** bietet eine lokale, durchsuchbare Liste mit 1.505 Java-Items
+aus Version 26.1 und 1.484 Icons. Suche nach deutschem/englischem Namen oder ID,
+Item anklicken, Anzahl setzen und **Give** klicken. Die Auswahl selbst sendet keinen Befehl.
+Der Katalog ist eine Auswahlhilfe; aeltere Server, neuere Versionen und Mods koennen andere
+Items anbieten. Eigene Item-IDs lassen sich weiterhin direkt eingeben. Fehlende Icons
+bekommen ein neutrales Symbol. Betten und 73 zuvor fehlende Icons werden aus einer
+zweiten Online-Quelle beim Erstellen des Katalogs lokal eingebettet. Im Browser sind keine externen Asset-Aufrufe erforderlich.
+Quellen stehen in [ITEM_SOURCES.md](webui/static/ITEM_SOURCES.md); mit
+`python3 tools/update_item_catalog.py` laesst sich der gebuendelte Stand reproduzieren.
 
 RCON kann pro Server aktiviert werden. Wichtig sind ein eigenes Passwort und ein eigener Host-Port pro Server, zum Beispiel `25575`, `25576`, `25577`.
 
@@ -283,7 +300,7 @@ sind bereits Teil des dann erstellten Backups. Fuer solche manuellen Eingriffe v
 Backup erstellen. Der interaktive CLI-Modus in `start_minecraft.sh` wird nicht vom WebUI-Startschutz betreut.
 
 Live-Test: WebUI-Prozess mit dem aktualisierten Code neu starten, Browser neu laden und im Header
-`v1.2.3` pruefen. Zuerst einen funktionierenden Paper-Server anwenden; die Aktion wartet auf die
+`v1.3.1` pruefen. Zuerst einen funktionierenden Paper-Server anwenden; die Aktion wartet auf die
 Startpruefung. Fehlstarts/Rollback anschliessend auf einem Testprofil durch ein inkompatibles
 Plugin-Update pruefen. Issue: [Startschutz und Fehlerprotokoll #14](https://github.com/JobbeDeluxe/minecraftdockerstartscript/issues/14).
 
@@ -330,4 +347,4 @@ Empfehlung fuer produktive Nutzung:
 
 ## Status
 
-`v1.2.3` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.3.1` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

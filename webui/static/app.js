@@ -14,6 +14,10 @@ let selectedSchedule = null;
 let activeView = "overview";
 const rconHistory = [];
 let rconHistoryIndex = 0;
+let itemCatalog = null;
+let itemCatalogRequest = null;
+let itemResultLimit = 80;
+let playerRequestSerial = 0;
 
 const serverTypes = ["PAPER", "FOLIA", "PURPUR", "SPIGOT", "VANILLA", "FABRIC", "FORGE", "QUILT", "BUKKIT", "SPONGEVANILLA", "MAGMA", "MOHIST", "NEOFORGE", "LEAF", "PUFFERFISH", "AIRPLANE", "BANNER", "YOUER", "GTNH", "CANYON", "LIMBO", "NANOLIMBO", "CRUCIBLE", "CUSTOM", "BUNGEECORD", "WATERFALL", "VELOCITY"];
 const proxyTypes = new Set(["BUNGEECORD", "WATERFALL", "VELOCITY"]);
@@ -739,6 +743,33 @@ Object.assign(I18N.en, {
   "message.pluginUpdateFailed": "Plugin update failed. Check the recovery result and last startup log in Management."
 });
 
+Object.assign(I18N.de, {
+  "players.choose": "Online-Spieler auswählen", "players.recipient": "Spieler / Empfänger",
+  "players.copy": "Name kopieren", "players.asTarget": "Als TP-Ziel", "players.tpTarget": "TP-Zielspieler",
+  "players.select": "Spieler auswählen …", "players.copied": "Spielername kopiert.",
+  "players.copyManual": "Name ist markiert – mit Strg+C kopieren.", "players.chooseFirst": "Bitte zuerst einen Spielernamen auswählen oder eingeben.",
+  "players.targetSet": "TP-Ziel gesetzt. Wähle jetzt den Spieler, der dorthin teleportiert werden soll.",
+  "items.id": "Item-ID", "items.amount": "Anzahl", "items.choose": "Item mit Icon auswählen",
+  "items.search": "Item suchen: deutscher / englischer Name oder ID", "items.more": "Weitere Items anzeigen",
+  "items.loading": "Itemliste wird geladen …", "items.failed": "Itemliste konnte nicht geladen werden. Zum Wiederholen die Auswahl schließen und öffnen. Eigene Item-ID kann weiter eingegeben werden.",
+  "items.count": "{shown} von {count} Treffern · Java-Katalog {version}", "items.empty": "Kein passendes Item gefunden.",
+  "items.hint": "Auswahl füllt nur das Item-Feld. Erst Give sendet den Befehl. Eigene Item-IDs bleiben möglich; verfügbare Items hängen von Serverversion und Mods ab.",
+  "items.manual": "Eigene Item-ID", "items.invalidAmount": "Die Anzahl muss eine ganze Zahl zwischen 1 und 2147483647 sein."
+});
+Object.assign(I18N.en, {
+  "players.choose": "Select online player", "players.recipient": "Player / recipient",
+  "players.copy": "Copy name", "players.asTarget": "Use as TP target", "players.tpTarget": "Teleport destination player",
+  "players.select": "Select player …", "players.copied": "Player name copied.",
+  "players.copyManual": "Name selected – press Ctrl+C to copy.", "players.chooseFirst": "Select or enter a player name first.",
+  "players.targetSet": "TP target set. Now select the player you want to teleport there.",
+  "items.id": "Item ID", "items.amount": "Amount", "items.choose": "Choose item with icon",
+  "items.search": "Find item: English / German name or ID", "items.more": "Show more items",
+  "items.loading": "Loading item catalog …", "items.failed": "Could not load the catalog. Close and reopen the picker to retry. You can still enter an item ID manually.",
+  "items.count": "{shown} of {count} matches · Java catalog {version}", "items.empty": "No matching items.",
+  "items.hint": "Selection only fills the item field. Give sends the command. Custom item IDs are supported; available items depend on server version and mods.",
+  "items.manual": "Custom item ID", "items.invalidAmount": "Amount must be a whole number between 1 and 2147483647."
+});
+
 function readStoredLanguage() {
   try {
     return window.localStorage?.getItem("mdwLanguage") || null;
@@ -829,6 +860,8 @@ function setLanguage(next) {
   renderNetworkSummary();
   renderOverview();
   renderSchedules();
+  renderItemChoices();
+  updateSelectedItem();
   if (selected) checkPorts().catch(() => {});
 }
 function current() { return servers.find(server => server.id === selected) || {}; }
@@ -889,8 +922,10 @@ function startServerStatusPolling() {
   });
 }
 async function loadServers() {
+  const previousSelection = selected;
   servers = await fetchServerSnapshot();
   if (!servers.some(server => server.id === selected)) selected = servers[0]?.id || null;
+  if (previousSelection !== selected) clearPlayerSelection();
   renderServers();
   renderEditor();
   renderNetworkSummary();
@@ -905,6 +940,7 @@ function selectServer(serverId) {
     return;
   }
   selected = serverId;
+  clearPlayerSelection();
   setConfigDirty(false);
   setActionStatus("");
   setRefreshStatus("");
@@ -1335,6 +1371,21 @@ $("embedMap").onclick = () => {
   frame.hidden = false;
 };
 $("refreshPlayers").onclick = () => loadPlayers(true);
+$("players").onchange = () => {
+  $("playerName").value = $("players").value;
+  $("playerFeedback").textContent = "";
+};
+$("playerName").oninput = () => {
+  const name = $("playerName").value.trim();
+  $("players").value = [...$("players").options].some(option => option.value === name) ? name : "";
+  $("playerFeedback").textContent = "";
+};
+$("copyPlayer").onclick = copyPlayerName;
+$("usePlayerAsTarget").onclick = usePlayerAsTarget;
+$("itemPicker").ontoggle = () => { if ($("itemPicker").open) loadItemCatalog(); };
+$("itemSearch").oninput = () => { itemResultLimit = 80; renderItemChoices(); };
+$("itemMore").onclick = () => { itemResultLimit += 80; renderItemChoices(); };
+$("giveItem").oninput = () => { updateSelectedItem(); renderItemChoices(); };
 document.querySelectorAll("[data-rcon-shortcut]").forEach(button => {
   button.onclick = () => sendShortcut(button.dataset.rconShortcut);
 });
@@ -1736,20 +1787,138 @@ async function loadBackups() {
   box.innerHTML = "";
   for (const backup of result.backups) box.append(el("option", { value: backup.path, text: backup.name }));
 }
+function clearPlayerSelection() {
+  playerRequestSerial++;
+  $("players").innerHTML = "";
+  $("onlinePlayerNames").innerHTML = "";
+  $("playerName").value = "";
+  $("targetPlayer").value = "";
+  $("playerFeedback").textContent = "";
+}
 async function loadPlayers(showResult = false) {
+  const serverId = selected;
+  const request = ++playerRequestSerial;
   try {
-    const result = await api(`/api/servers/${selected}/players`);
-    const server = current();
-    server.players = result;
+    const result = await api(`/api/servers/${serverId}/players`);
+    if (selected !== serverId || request !== playerRequestSerial) return;
+    const server = servers.find(entry => entry.id === serverId);
+    if (server) server.players = result;
     renderServers();
+    renderOverview();
     const box = $("players");
+    const chosenName = $("playerName").value.trim();
     box.innerHTML = "";
-    for (const name of result.players || []) box.append(el("option", { value: name, text: name }));
+    box.append(el("option", { value: "", text: t("players.select") }));
+    const suggestions = $("onlinePlayerNames");
+    suggestions.innerHTML = "";
+    for (const name of result.players || []) {
+      box.append(el("option", { value: name, text: name }));
+      suggestions.append(el("option", { value: name }));
+    }
+    box.value = (result.players || []).includes(chosenName) ? chosenName : "";
     $("playerSummary").textContent = result.max ? `${result.online}/${result.max} online` : `${result.online ?? 0} online`;
     if (showResult) $("result").textContent = result.raw || t("message.playersUpdated");
   } catch (err) {
-    $("playerSummary").textContent = t("message.playerUnavailable", { message: err.message });
+    if (selected === serverId && request === playerRequestSerial) $("playerSummary").textContent = t("message.playerUnavailable", { message: err.message });
   }
+}
+async function copyPlayerName() {
+  const name = selectedPlayer();
+  if (!name) { $("playerFeedback").textContent = t("players.chooseFirst"); return; }
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(name);
+  } catch {
+    // Plain HTTP on a LAN has no Clipboard API. Keep a selectable fallback.
+    const field = $("playerName");
+    field.value = name;
+    field.focus();
+    field.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch {}
+    $("playerFeedback").textContent = t(copied ? "players.copied" : "players.copyManual");
+    return;
+  }
+  $("playerFeedback").textContent = t("players.copied");
+}
+function usePlayerAsTarget() {
+  const name = selectedPlayer();
+  if (!name) { $("playerFeedback").textContent = t("players.chooseFirst"); return; }
+  $("targetPlayer").value = name;
+  $("playerFeedback").textContent = t("players.targetSet");
+}
+function normalizeItemSearch(value) {
+  return String(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss").toLowerCase();
+}
+function matchingItems(items, query) {
+  const terms = normalizeItemSearch(query).trim().split(/\s+/).filter(Boolean);
+  return items.filter(item => {
+    const text = normalizeItemSearch(`${item.id} ${item.de} ${item.en}`);
+    return terms.every(term => text.includes(term));
+  });
+}
+function itemIcon(item) {
+  const icon = el("span", { class: "item-icon", "aria-hidden": "true" });
+  if (/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(item?.icon || "")) {
+    // Show the first frame of animated textures without stretching the sprite strip.
+    icon.style.backgroundImage = `url("${item.icon}")`;
+    if (item.iconLayout === "contain") {
+      icon.style.backgroundSize = "contain";
+      icon.style.backgroundPosition = "center";
+    }
+  } else icon.textContent = "◇";
+  return icon;
+}
+async function loadItemCatalog() {
+  if (itemCatalog) { renderItemChoices(); return; }
+  if (itemCatalogRequest) return itemCatalogRequest;
+  $("itemCatalogStatus").textContent = t("items.loading");
+  itemCatalogRequest = (async () => {
+    try {
+      const data = await api("/static/items.json");
+      if (!Array.isArray(data.items)) throw new Error("Invalid item catalog");
+      itemCatalog = data;
+      renderItemChoices();
+      updateSelectedItem();
+    } catch {
+      $("itemCatalogStatus").textContent = t("items.failed");
+    } finally { itemCatalogRequest = null; }
+  })();
+  return itemCatalogRequest;
+}
+function updateSelectedItem() {
+  const id = $("giveItem").value.trim();
+  const box = $("selectedItem");
+  box.innerHTML = "";
+  if (!id) return;
+  const item = itemCatalog?.items.find(item => item.id === id || item.id === `minecraft:${id}`);
+  box.append(itemIcon(item), el("span", { text: item ? item[lang] || item.en : t("items.manual") }));
+}
+function renderItemChoices() {
+  if (!itemCatalog) return;
+  const matches = matchingItems(itemCatalog.items, $("itemSearch").value);
+  const box = $("itemChoices");
+  box.innerHTML = "";
+  const selectedId = $("giveItem").value.trim();
+  for (const item of matches.slice(0, itemResultLimit)) {
+    const active = item.id === selectedId || item.id === `minecraft:${selectedId}`;
+    const button = el("button", { type: "button", class: `item-choice${active ? " active" : ""}`, "aria-pressed": String(active), title: item.id }, [
+      itemIcon(item), el("span", { class: "item-choice-name", text: item[lang] || item.en }), el("small", { text: item.id.replace("minecraft:", "") })
+    ]);
+    button.onclick = () => {
+      $("giveItem").value = item.id;
+      updateSelectedItem();
+      // Preserve keyboard focus on the chosen button while updating selection.
+      for (const choice of box.children) {
+        const chosen = choice === button;
+        choice.classList.toggle("active", chosen);
+        choice.setAttribute("aria-pressed", String(chosen));
+      }
+    };
+    box.append(button);
+  }
+  $("itemCatalogStatus").textContent = matches.length ? t("items.count", { shown: Math.min(itemResultLimit, matches.length), count: matches.length, version: itemCatalog.version }) : t("items.empty");
+  $("itemMore").hidden = matches.length <= itemResultLimit;
 }
 async function loadVersions(type, showResult = false) {
   const box = $("versionOptions");
@@ -1768,7 +1937,7 @@ async function loadVersions(type, showResult = false) {
     if (showResult) showOutput(t("message.versionsFailed", { message: err.message }));
   }
 }
-function selectedPlayer() { return $("players").value.trim() || $("playerName").value.trim(); }
+function selectedPlayer() { return $("playerName").value.trim() || $("players").value.trim(); }
 async function sendShortcut(kind) {
   const player = selectedPlayer();
   const target = $("targetPlayer").value.trim();
@@ -1781,6 +1950,7 @@ async function sendShortcut(kind) {
   }
   if (kind === "give") {
     if (!player || !item) return $("result").textContent = t("message.giveNeedsItem");
+    if (!/^\d+$/.test(amount) || Number(amount) < 1 || Number(amount) > 2147483647) return $("result").textContent = t("items.invalidAmount");
     command = `give ${player} ${item} ${amount}`;
   }
   if (kind === "kick") {

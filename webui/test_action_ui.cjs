@@ -151,3 +151,84 @@ test('plugin restart uses shared action workflow and retains original target aft
   assert.deepEqual(restarts, [['restart', 'original']]);
   assert.equal(refreshes, 2);
 });
+
+function playerContext() {
+  const nodes = {};
+  for (const id of ['players', 'playerName', 'targetPlayer', 'onlinePlayerNames', 'playerFeedback', 'playerSummary', 'result']) {
+    nodes[id] = { value: '', textContent: '', children: [], append(child) { this.children.push(child); },
+      focus() {}, select() { this.wasSelected = true; } };
+    Object.defineProperty(nodes[id], 'innerHTML', { set() { this.children = []; } });
+  }
+  const context = vm.createContext({
+    selected: 'test', playerRequestSerial: 0, servers: [{ id: 'test' }],
+    $: id => nodes[id], t: key => key, el: (tag, attrs) => ({ tag, ...attrs }),
+    renderServers: () => {}, renderOverview: () => {}, navigator: {}, document: { execCommand: () => false },
+    api: async () => ({ players: ['Alex', 'Steve'], online: 2, max: 20 }),
+  });
+  vm.runInContext(extract('function clearPlayerSelection() {', 'async function loadVersions('), context);
+  vm.runInContext(extract('function selectedPlayer()', 'async function sendShortcut('), context);
+  return { context, nodes };
+}
+
+test('manually entered recipient wins over an old list selection', () => {
+  const { context, nodes } = playerContext();
+  nodes.players.value = 'Alex';
+  nodes.playerName.value = 'Steve';
+  assert.equal(context.selectedPlayer(), 'Steve');
+  context.usePlayerAsTarget();
+  assert.equal(nodes.targetPlayer.value, 'Steve');
+});
+
+test('refreshing players preserves the typed recipient and selection', async () => {
+  const { context, nodes } = playerContext();
+  nodes.playerName.value = 'Steve';
+  await context.loadPlayers();
+  assert.equal(nodes.playerName.value, 'Steve');
+  assert.equal(nodes.players.value, 'Steve');
+  nodes.playerName.value = 'OfflinePlayer';
+  await context.loadPlayers();
+  assert.equal(nodes.playerName.value, 'OfflinePlayer');
+  assert.equal(nodes.players.value, '');
+});
+
+test('late player response cannot overwrite a different server', async () => {
+  const { context, nodes } = playerContext();
+  let resolve;
+  context.api = () => new Promise(done => { resolve = done; });
+  const request = context.loadPlayers();
+  context.selected = 'other';
+  nodes.playerName.value = 'OtherPlayer';
+  resolve({ players: ['Alex'] });
+  await request;
+  assert.equal(nodes.playerName.value, 'OtherPlayer');
+  assert.equal(nodes.players.children.length, 0);
+});
+
+test('copy falls back to selectable name when clipboard is unavailable on HTTP', async () => {
+  const { context, nodes } = playerContext();
+  nodes.playerName.value = 'Alex';
+  await context.copyPlayerName();
+  assert.equal(nodes.playerName.wasSelected, true);
+  assert.equal(nodes.playerFeedback.textContent, 'players.copyManual');
+});
+
+test('copy writes the selected name to the clipboard when available', async () => {
+  const { context, nodes } = playerContext();
+  let copied;
+  context.navigator.clipboard = { writeText: async text => { copied = text; } };
+  nodes.playerName.value = 'Alex';
+  await context.copyPlayerName();
+  assert.equal(copied, 'Alex');
+  assert.equal(nodes.playerFeedback.textContent, 'players.copied');
+});
+
+test('catalog search supports German, English, IDs and umlauts', () => {
+  const { context } = playerContext();
+  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, 'static/items.json'), 'utf8'));
+  for (const query of ['Diamantschwert', 'diamond sword', 'minecraft:diamond_sword']) {
+    assert.ok(context.matchingItems(catalog.items, query).some(item => item.id === 'minecraft:diamond_sword'));
+  }
+  const example = [{ id: 'minecraft:example', de: 'Glück', en: 'Luck' }];
+  assert.equal(context.matchingItems(example, 'gluck').length, 1);
+  assert.equal(context.matchingItems(example, 'not-an-item').length, 0);
+});

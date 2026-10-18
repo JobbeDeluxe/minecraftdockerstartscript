@@ -1,6 +1,11 @@
 # Minecraft Docker WebUI
 
-Version: `v1.2.3`
+Version: `v1.3.1`
+
+Neu in v1.3.1: Spielerauswahl uebernimmt den Namen ins Empfaengerfeld, mit Kopierbutton
+und Uebernahme als TP-Ziel. Give bietet eine durchsuchbare Offline-Itemliste mit Icons,
+deutschen/englischen Namen und manueller ID-Eingabe. Betten und 73 zuvor fehlende Icons
+werden ueber einen lokal eingebetteten Online-Fallback ergaenzt. Erst der Give-Button sendet den Befehl.
 
 Neu: automatischer Startschutz mit konsistentem Backup, Start-/Stabilitaetspruefung,
 Ruecksicherung nach fehlgeschlagenen Aenderungen und dauerhaftem letzten Bootfehlerprotokoll.
