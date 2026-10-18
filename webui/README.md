@@ -1,8 +1,11 @@
 # Minecraft Docker WebUI
 
-Version: `v1.3.1`
+Version: `v1.3.2`
 
-Neu in v1.3.1: Spielerauswahl uebernimmt den Namen ins Empfaengerfeld, mit Kopierbutton
+Neu in v1.3.2: Alle 1.505 Katalog-Items haben ein lokal eingebettetes Icon, inklusive
+Regalen, Kupfergittern und Blasseichenzaun. Der Generator verhindert unvollstaendige Updates.
+
+Seit v1.3.1: Spielerauswahl uebernimmt den Namen ins Empfaengerfeld, mit Kopierbutton
 und Uebernahme als TP-Ziel. Give bietet eine durchsuchbare Offline-Itemliste mit Icons,
 deutschen/englischen Namen und manueller ID-Eingabe. Betten und 73 zuvor fehlende Icons
 werden ueber einen lokal eingebetteten Online-Fallback ergaenzt. Erst der Give-Button sendet den Befehl.
