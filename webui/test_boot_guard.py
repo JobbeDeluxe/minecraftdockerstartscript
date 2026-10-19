@@ -407,7 +407,7 @@ class AppIntegrationTest(unittest.TestCase):
                 self.assertEqual(payload["state"], "error")
                 self.assertNotIn("checkpoint", payload)
             with urllib.request.urlopen(base + "/api/version") as response:
-                self.assertEqual(json.load(response)["version"], "v1.3.2")
+                self.assertEqual(json.load(response)["version"], "v1.3.3")
             with urllib.request.urlopen(base + "/static/items.json") as response:
                 catalog = json.load(response)
                 diamond = next(item for item in catalog["items"] if item["id"] == "minecraft:diamond")

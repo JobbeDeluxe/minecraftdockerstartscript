@@ -18,6 +18,7 @@ let itemCatalog = null;
 let itemCatalogRequest = null;
 let itemResultLimit = 80;
 let playerRequestSerial = 0;
+const serverActivity = new Map();
 
 const serverTypes = ["PAPER", "FOLIA", "PURPUR", "SPIGOT", "VANILLA", "FABRIC", "FORGE", "QUILT", "BUKKIT", "SPONGEVANILLA", "MAGMA", "MOHIST", "NEOFORGE", "LEAF", "PUFFERFISH", "AIRPLANE", "BANNER", "YOUER", "GTNH", "CANYON", "LIMBO", "NANOLIMBO", "CRUCIBLE", "CUSTOM", "BUNGEECORD", "WATERFALL", "VELOCITY"];
 const proxyTypes = new Set(["BUNGEECORD", "WATERFALL", "VELOCITY"]);
@@ -862,6 +863,7 @@ function setLanguage(next) {
   renderSchedules();
   renderItemChoices();
   updateSelectedItem();
+  renderActivity();
   if (selected) checkPorts().catch(() => {});
 }
 function current() { return servers.find(server => server.id === selected) || {}; }
@@ -926,6 +928,7 @@ async function loadServers() {
   servers = await fetchServerSnapshot();
   if (!servers.some(server => server.id === selected)) selected = servers[0]?.id || null;
   if (previousSelection !== selected) clearPlayerSelection();
+  renderActivity();
   renderServers();
   renderEditor();
   renderNetworkSummary();
@@ -942,8 +945,7 @@ function selectServer(serverId) {
   selected = serverId;
   clearPlayerSelection();
   setConfigDirty(false);
-  setActionStatus("");
-  setRefreshStatus("");
+  renderActivity();
   renderServers();
   renderEditor();
   renderNetworkSummary();
@@ -1094,35 +1096,45 @@ function formData() {
   return data;
 }
 async function saveCurrentProfile() {
+  const serverId = selected;
   const saved = await api("/api/servers", { method: "POST", body: JSON.stringify(formData()) });
-  selected = saved.id;
-  setConfigDirty(false);
+  if (selected === serverId) {
+    selected = saved.id;
+    setConfigDirty(false);
+    renderActivity();
+  }
   return saved;
 }
 async function reloadCurrentProfile() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   if (!selected) return;
   if (configDirty && !confirm(t("prompt.discardProfile"))) return;
   setConfigDirty(false);
   await loadServers();
-  showOutput(t("message.profileReloaded"));
+  reportOutput(t("message.profileReloaded"));
 }
 async function moveDataDir() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const data = formData();
   const server = current();
   const oldPath = server.data_dir || "";
   const target = (data.data_dir || "").trim();
   if (!selected) return;
-  if (!target) return showOutput(t("message.noDataDir"));
-  if (target === oldPath) return showOutput(t("message.dataUnchanged"));
+  if (!target) return reportOutput(t("message.noDataDir"));
+  if (target === oldPath) return reportOutput(t("message.dataUnchanged"));
   const phrase = t("prompt.movePhrase");
   const answer = prompt(t("prompt.moveData", { oldPath: oldPath || "(leer)", target, phrase }));
   if (answer !== phrase) return;
-  showOutput(t("message.movingData"));
-  const result = await api(`/api/servers/${selected}/move-data-dir`, { method: "POST", body: JSON.stringify({ target, profile: data }) });
-  selected = result.server?.id || selected;
-  setConfigDirty(false);
+  reportOutput(t("message.movingData"));
+  const result = await api(`/api/servers/${outputServerId}/move-data-dir`, { method: "POST", body: JSON.stringify({ target, profile: data }) });
+  if (selected === outputServerId) {
+    selected = result.server?.id || selected;
+    setConfigDirty(false);
+  }
   await loadServers();
-  showOutput([result.message || t("message.dataMoved"), ...(result.details || [])].join("\n"));
+  reportOutput([result.message || t("message.dataMoved"), ...(result.details || [])].join("\n"));
 }
 function cleanNetworkAlias(server) {
   return String((server && server.network_alias) || server?.id || server?.name || "server").trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, "-").replace(/^[-_.]+|[-_.]+$/g, "") || "server";
@@ -1160,32 +1172,36 @@ function renderNetworkSummary() {
   box.textContent = lines.join("\n");
 }
 async function applyNetwork() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   try {
     if (configDirty) {
       await saveCurrentProfile();
       await loadServers();
     }
-    const server = current();
+    const server = servers.find(entry => entry.id === outputServerId) || {};
     const group = String(server.network_group || "").trim();
     if (!selected) return;
-    if (!group) return showOutput(t("network.needGroup"));
+    if (!group) return reportOutput(t("network.needGroup"));
     if (!confirm(t("network.confirm", { group }))) return;
-    showOutput(t("network.running"));
-    const result = await api(`/api/servers/${selected}/network/apply`, { method: "POST", body: "{}" });
+    reportOutput(t("network.running"));
+    const result = await api(`/api/servers/${outputServerId}/network/apply`, { method: "POST", body: "{}" });
     await loadServers();
-    showOutput([result.message || t("network.done"), ...(result.details || [])].join("\n"));
+    reportOutput([result.message || t("network.done"), ...(result.details || [])].join("\n"));
   } catch (err) {
-    showOutput(err.message);
+    reportOutput(err.message);
   }
 }
 $("editor").onsubmit = async event => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   event.preventDefault();
   try {
     await saveCurrentProfile();
     await loadServers();
-    showOutput(t("message.saved"));
+    reportOutput(t("message.saved"));
   } catch (err) {
-    showOutput(err.message);
+    reportOutput(err.message);
   }
 };
 $("editor").oninput = async () => {
@@ -1276,7 +1292,9 @@ function actionLabel(action) { return t(actionLabelKeys[action] || action); }
 async function runProfileAction(action, targetServerId = selected) {
   let note = "";
   let poll = null;
-  setRefreshStatus("");
+  let running = true;
+  let polling = false;
+  setRefreshStatus("", targetServerId);
   try {
     if (action === "delete-data") {
       const data = formData();
@@ -1285,49 +1303,53 @@ async function runProfileAction(action, targetServerId = selected) {
       if (answer !== phrase) return;
     }
     if (configDirty && selected === targetServerId) {
-      await saveCurrentProfile();
-      targetServerId = selected;
+      const saved = await saveCurrentProfile();
+      targetServerId = saved.id;
       note = t("message.profileSaved");
     }
     const serverId = targetServerId;
     const label = actionLabel(action);
-    setActionStatus(t("message.actionRunning", { label }), "info");
-    showOutput(`${note}${t("message.actionRunning", { label })}`);
+    setActionStatus(t("message.actionRunning", { label }), "info", serverId);
+    showOutput(`${note}${t("message.actionRunning", { label })}`, serverId);
     const refreshLog = async () => {
+      if (!running || polling) return;
+      polling = true;
       try {
         const log = await api(`/api/servers/${serverId}/action-log`);
-        if (log.content) showOutput(`${note}${t("message.actionRunning", { label })}\n\n${log.content}`);
-      } catch {}
+        if (running && log.content) showOutput(`${note}${t("message.actionRunning", { label })}\n\n${log.content}`, serverId);
+      } catch {} finally { polling = false; }
     };
     if (liveActionLogActions.has(action)) {
-      await refreshLog();
       poll = setInterval(refreshLog, 1000);
     }
     const result = await api(`/api/servers/${serverId}/action`, { method: "POST", body: JSON.stringify({ action }) });
-    if (poll) {
+    running = false;
+    if (poll !== null) {
       clearInterval(poll);
       poll = null;
     }
-    showOutput(`${note}$ ${action}\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
+    showOutput(`${note}$ ${action}\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`, serverId);
     if (result.ok) {
-      setActionStatus(t("action.completed", { label }), "success");
+      setActionStatus(t("action.completed", { label }), "success", serverId);
     } else {
       const heading = result.error_type === "port_conflict"
         ? t("action.portConflict")
         : (result.message || result.stderr || result.stdout || t("action.failed", { label }));
       const details = (result.blockers || []).map(translateWarning).join("\n");
-      setActionStatus([heading, details].filter(Boolean).join("\n\n"), "error");
+      setActionStatus([heading, details].filter(Boolean).join("\n\n"), "error", serverId);
     }
     try {
       await loadServers();
     } catch (refreshError) {
       // Refresh errors must never replace the authoritative action result.
-      setRefreshStatus(t("action.refreshFailed", { message: refreshError.message }));
+      setRefreshStatus(t("action.refreshFailed", { message: refreshError.message }), serverId);
     }
   } catch (err) {
-    if (poll) clearInterval(poll);
-    setActionStatus(err.message, "error");
-    showOutput(err.message);
+    setActionStatus(err.message, "error", targetServerId);
+    showOutput(err.message, targetServerId);
+  } finally {
+    running = false;
+    if (poll !== null) clearInterval(poll);
   }
 }
 document.querySelectorAll("[data-action]").forEach(button => {
@@ -1345,7 +1367,7 @@ $("deleteServer").onclick = async () => {
   servers = servers.filter(item => item.id !== target);
   selected = servers[0]?.id || null;
   await loadServers();
-  $("result").textContent = [result.message || t("message.serverDeleted", { id: target }), ...(result.details || [])].join("\n");
+  showOutput([result.message || t("message.serverDeleted", { id: target }), ...(result.details || [])].join("\n"));
 };
 $("refreshLogs").onclick = () => loadLogs();
 $("refreshBootLog").onclick = () => loadBootLog();
@@ -1398,6 +1420,8 @@ function appendRcon(command, result = null, error = null) {
   consoleBox.scrollTop = consoleBox.scrollHeight;
 }
 async function sendRconCommand(rawCommand) {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const command = String(rawCommand || "").trim();
   if (!command || !selected) return;
   rconHistory.push(command);
@@ -1405,13 +1429,13 @@ async function sendRconCommand(rawCommand) {
   $("rconCommand").value = "";
   appendRcon(command, { ok: true, stdout: lang === "de" ? "Wird gesendet …" : "Sending …" });
   try {
-    const result = await api(`/api/servers/${selected}/rcon`, { method: "POST", body: JSON.stringify({ command }) });
+    const result = await api(`/api/servers/${outputServerId}/rcon`, { method: "POST", body: JSON.stringify({ command }) });
     const box = $("rconOutput");
     const lines = box.textContent.split("\n\n");
     lines.pop();
     box.textContent = lines.join("\n\n");
     appendRcon(command, result);
-    if (!result.ok) showOutput(`${t("message.error")}: ${result.stderr || result.stdout || command}`);
+    if (!result.ok) reportOutput(`${t("message.error")}: ${result.stderr || result.stdout || command}`);
     return result;
   } catch (err) {
     const box = $("rconOutput");
@@ -1419,7 +1443,7 @@ async function sendRconCommand(rawCommand) {
     lines.pop();
     box.textContent = lines.join("\n\n");
     appendRcon(command, null, err.message);
-    showOutput(err.message);
+    reportOutput(err.message);
     return null;
   }
 }
@@ -1460,30 +1484,52 @@ function setConfigDirty(value) {
   const button = $("editor").querySelector("button[type=submit]");
   if (button) button.className = value ? "primary warn" : "primary";
 }
-function showOutput(text) {
-  $("result").textContent = text;
-  $("result").scrollTop = $("result").scrollHeight;
+function activityFor(serverId = selected) {
+  if (!serverActivity.has(serverId)) serverActivity.set(serverId, { output: "", status: "", type: "info", refresh: "" });
+  return serverActivity.get(serverId);
 }
-function setActionStatus(message, type = "info") {
-  const box = $("actionStatus");
-  if (!box) return;
-  box.textContent = message || "";
-  box.className = `action-status ${type}`;
-  box.hidden = !message;
+function renderActivity() {
+  const state = activityFor();
+  const output = $("result");
+  if (output.textContent !== state.output) {
+    output.textContent = state.output;
+    output.scrollTop = output.scrollHeight;
+  }
+  const owner = $("activityServer");
+  if (owner) owner.textContent = servers.find(server => server.id === selected)?.name || selected || "";
+  const status = $("actionStatus");
+  if (status) {
+    status.textContent = state.status;
+    status.className = `action-status ${state.type}`;
+    status.hidden = !state.status;
+  }
+  const refresh = $("refreshStatus");
+  if (refresh) {
+    refresh.textContent = state.refresh;
+    refresh.hidden = !state.refresh;
+  }
 }
-function setRefreshStatus(message) {
-  const box = $("refreshStatus");
-  if (!box) return;
-  box.textContent = message || "";
-  box.hidden = !message;
+function showOutput(text, serverId = selected) {
+  activityFor(serverId).output = String(text ?? "");
+  if (serverId === selected) renderActivity();
+}
+function setActionStatus(message, type = "info", serverId = selected) {
+  Object.assign(activityFor(serverId), { status: message || "", type });
+  if (serverId === selected) renderActivity();
+}
+function setRefreshStatus(message, serverId = selected) {
+  activityFor(serverId).refresh = message || "";
+  if (serverId === selected) renderActivity();
 }
 function waitPaint() { return new Promise(resolve => setTimeout(resolve, 80)); }
 $("savePlugins").onclick = async () => savePlugins();
 async function savePlugins() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const text = $("plugins").value;
-  const result = await api(`/api/servers/${selected}/plugins`, { method: "POST", body: JSON.stringify({ content: text }) });
-  setPluginsDirty(false);
-  showOutput(result.message);
+  const result = await api(`/api/servers/${outputServerId}/plugins`, { method: "POST", body: JSON.stringify({ content: text }) });
+  if (selected === outputServerId) setPluginsDirty(false);
+  reportOutput(result.message);
 }
 $("reloadPlugins").onclick = async () => {
   if (!pluginsDirty || confirm(t("prompt.discardPlugins"))) await loadPlugins();
@@ -1493,34 +1539,39 @@ async function updatePlugins() {
   if (!selected) return;
   const serverId = selected;
   let poll = null;
+  let polling = false;
   try {
     if (pluginsDirty) {
       const save = confirm(t("prompt.updatePluginsUnsaved"));
       if (save) await savePlugins();
       else await loadPlugins();
     }
-    showOutput(t("message.pluginUpdateRunning"));
+    showOutput(t("message.pluginUpdateRunning"), serverId);
     const refreshLog = async () => {
+      if (poll === null || polling) return;
+      polling = true;
       try {
         const log = await api(`/api/servers/${serverId}/action-log`);
-        if (poll !== null && selected === serverId && log.content) showOutput(`${t("message.pluginUpdateRunning")}\n\n${log.content}`);
-      } catch {}
+        if (poll !== null && log.content) showOutput(`${t("message.pluginUpdateRunning")}\n\n${log.content}`, serverId);
+      } catch {} finally { polling = false; }
     };
     poll = setInterval(refreshLog, 1000);
     const result = await api(`/api/servers/${serverId}/action`, { method: "POST", body: JSON.stringify({ action: "plugins" }) });
     clearInterval(poll);
     poll = null;
-    showOutput(`$ plugins\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
+    const output = `$ plugins\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`;
+    showOutput(output, serverId);
     await refreshServerStatuses().catch(() => {});
     if (result.ok && confirm(t("prompt.restartAfterPlugins"))) {
       await runProfileAction("restart", serverId);
     } else if (!result.ok) {
-      showOutput(`${$("result").textContent}\n\n${t("message.pluginUpdateFailed")}`);
+      showOutput(`${output}\n\n${t("message.pluginUpdateFailed")}`, serverId);
     }
   } catch (error) {
-    showOutput(error.message);
+    showOutput(error.message, serverId);
   } finally {
     if (poll !== null) clearInterval(poll);
+    poll = null;
     await refreshServerStatuses().catch(() => {});
     if (selected === serverId) {
       await Promise.allSettled([loadManualPlugins(), loadInstalledPlugins(), loadBootLog()]);
@@ -1529,38 +1580,46 @@ async function updatePlugins() {
 }
 $("saveProperties").onclick = async () => saveProperties();
 async function saveProperties() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const text = $("serverProperties").value;
-  const result = await api(`/api/servers/${selected}/properties`, { method: "POST", body: JSON.stringify({ content: text }) });
-  setPropertiesDirty(false);
-  showOutput(result.message);
+  const result = await api(`/api/servers/${outputServerId}/properties`, { method: "POST", body: JSON.stringify({ content: text }) });
+  if (selected === outputServerId) setPropertiesDirty(false);
+  reportOutput(result.message);
 }
 $("reloadProperties").onclick = async () => {
   if (!propertiesDirty || confirm(t("prompt.discardProperties"))) await loadProperties();
 };
 $("uploadPlugin").onclick = async () => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const file = $("manualPluginFile").files[0];
   if (!file) return;
   const data = await file.arrayBuffer();
   let binary = "";
   new Uint8Array(data).forEach(byte => binary += String.fromCharCode(byte));
-  const result = await api(`/api/servers/${selected}/manual-plugins`, { method: "POST", body: JSON.stringify({ name: file.name, content: btoa(binary) }) });
-  $("result").textContent = result.message;
+  const result = await api(`/api/servers/${outputServerId}/manual-plugins`, { method: "POST", body: JSON.stringify({ name: file.name, content: btoa(binary) }) });
+  reportOutput(result.message);
   await loadManualPlugins();
 };
 $("deleteManualPlugin").onclick = async () => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const name = $("manualPlugins").value;
   if (!name || !confirm(t("prompt.deleteManualPlugin", { name }))) return;
-  const result = await api(`/api/servers/${selected}/manual-plugins/${encodeURIComponent(name)}`, { method: "DELETE" });
-  $("result").textContent = result.message;
+  const result = await api(`/api/servers/${outputServerId}/manual-plugins/${encodeURIComponent(name)}`, { method: "DELETE" });
+  reportOutput(result.message);
   await loadManualPlugins();
 };
 $("refreshInstalledPlugins").onclick = () => loadInstalledPlugins(true);
 $("deleteInstalledPlugin").onclick = async () => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const name = $("installedPluginSelect").value;
   if (!name || !confirm(t("prompt.deleteInstalledPlugin", { name }))) return;
-  const result = await api(`/api/servers/${selected}/installed-plugins/${encodeURIComponent(name)}`, { method: "DELETE" });
-  $("result").textContent = result.message;
-  await loadInstalledPlugins(true);
+  const result = await api(`/api/servers/${outputServerId}/installed-plugins/${encodeURIComponent(name)}`, { method: "DELETE" });
+  reportOutput(result.message);
+  if (selected === outputServerId) await loadInstalledPlugins(true);
 };
 $("loadFiles").onclick = () => loadFiles(true);
 $("upFiles").onclick = () => goUpFiles();
@@ -1572,24 +1631,30 @@ $("renameEntry").onclick = () => renameEntry();
 $("deleteEntry").onclick = () => deleteEntry();
 $("uploadZip").onclick = () => uploadZip();
 $("restoreBackup").onclick = async () => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const file = $("backups").value;
-  if (!file) return showOutput(t("message.selectBackup"));
+  if (!file) return reportOutput(t("message.selectBackup"));
   if (!confirm(t("prompt.restore"))) return;
-  showOutput(t("message.restoreRunning", { file }));
-  const result = await api(`/api/servers/${selected}/restore`, { method: "POST", body: JSON.stringify({ file }) });
-  showOutput(`$ restore\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
+  reportOutput(t("message.restoreRunning", { file }));
+  const result = await api(`/api/servers/${outputServerId}/restore`, { method: "POST", body: JSON.stringify({ file }) });
+  reportOutput(`$ restore\nexit ${result.code}\n\n${result.stdout}\n${result.stderr}`);
 };
 $("importBackup").onclick = async () => {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const file = $("backups").value;
   const id = $("importId").value.trim();
-  if (!file) return showOutput(t("message.noBackup"));
-  if (!id) return showOutput(t("message.importNeedId"));
-  showOutput(t("message.importRunning", { file, id }));
+  if (!file) return reportOutput(t("message.noBackup"));
+  if (!id) return reportOutput(t("message.importNeedId"));
+  reportOutput(t("message.importRunning", { file, id }));
   const result = await api("/api/backups/import", { method: "POST", body: JSON.stringify({ file, id }) });
   const details = result.result ? `\n\n$ restore\nexit ${result.result.code}\n\n${result.result.stdout}\n${result.result.stderr}` : "";
-  showOutput(`${result.message || t("message.importDone")}${details}`);
-  selected = id;
-  setConfigDirty(false);
+  showOutput(`${result.message || t("message.importDone")}${details}`, id);
+  if (selected === outputServerId) {
+    selected = id;
+    setConfigDirty(false);
+  }
   await loadServers();
 };
 async function refreshDetails() {
@@ -1630,13 +1695,15 @@ async function loadManualPlugins() {
   for (const name of result.plugins) box.append(el("option", { value: name, text: name }));
 }
 async function loadInstalledPlugins(showResult = false) {
-  const result = await api(`/api/servers/${selected}/installed-plugins`);
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
+  const result = await api(`/api/servers/${outputServerId}/installed-plugins`);
   const select = $("installedPluginSelect");
   select.innerHTML = "";
   for (const plugin of result.plugins || []) select.append(el("option", { value: plugin.name, text: plugin.name }));
   const text = (result.plugins || []).map(plugin => `${plugin.name} (${Math.round((plugin.size || 0) / 1024)} KiB)`).join("\n");
   $("installedPlugins").textContent = text || t("message.noJars");
-  if (showResult) showOutput(t("message.installedPlugins", { content: $("installedPlugins").textContent }));
+  if (showResult) reportOutput(t("message.installedPlugins", { content: $("installedPlugins").textContent }));
 }
 function setFileEditorDirty(value) {
   fileEditorDirty = value;
@@ -1663,26 +1730,30 @@ function refreshFileSelectionMarks() {
   });
 }
 async function loadFileContent(path = null) {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const target = path || fileEditorPath;
-  if (!target) return showOutput(t("message.noTextFile"));
+  if (!target) return reportOutput(t("message.noTextFile"));
   if (fileEditorDirty && !confirm(t("prompt.discardFile"))) {
     refreshFileSelectionMarks();
     return false;
   }
-  const result = await api(`/api/servers/${selected}/file-content?path=${encodeURIComponent(target)}`);
+  const result = await api(`/api/servers/${outputServerId}/file-content?path=${encodeURIComponent(target)}`);
   $("fileContent").value = result.content || "";
   setFileEditorPath(result.path || target);
   setFileEditorDirty(false);
   selectedDataEntryPath = fileEditorPath;
   refreshFileSelectionMarks();
-  showOutput(t("message.fileLoaded", { path: fileEditorPath }));
+  reportOutput(t("message.fileLoaded", { path: fileEditorPath }));
   return true;
 }
 async function saveFileContent() {
-  if (!fileEditorPath) return showOutput(t("message.noTextFile"));
-  const result = await api(`/api/servers/${selected}/file-content`, { method: "POST", body: JSON.stringify({ path: fileEditorPath, content: $("fileContent").value }) });
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
+  if (!fileEditorPath) return reportOutput(t("message.noTextFile"));
+  const result = await api(`/api/servers/${outputServerId}/file-content`, { method: "POST", body: JSON.stringify({ path: fileEditorPath, content: $("fileContent").value }) });
   setFileEditorDirty(false);
-  showOutput(result.message);
+  reportOutput(result.message);
 }
 function fileSize(size) { return `${Math.round((size || 0) / 1024)} KiB`; }
 function selectDataEntry(path) {
@@ -1696,8 +1767,10 @@ async function openFolder(path) {
   await loadFiles(true);
 }
 async function loadFiles(showResult = false, pathOverride = null) {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const path = pathOverride ?? $("filePath").value.trim();
-  const result = await api(`/api/servers/${selected}/files?path=${encodeURIComponent(path)}`);
+  const result = await api(`/api/servers/${outputServerId}/files?path=${encodeURIComponent(path)}`);
   const folderBox = $("fileFolders");
   const fileBox = $("fileEntries");
   selectedDataEntryPath = "";
@@ -1712,7 +1785,7 @@ async function loadFiles(showResult = false, pathOverride = null) {
     const pick = el("button", { type: "button", class: "file-pick", text: t("button.select") || "Auswahl" });
     open.onclick = () => openFolder(folder.path);
     pick.dataset.path = folder.path;
-    pick.onclick = () => { selectDataEntry(folder.path); showOutput(t("message.selectedPath", { path: folder.path })); };
+    pick.onclick = () => { selectDataEntry(folder.path); reportOutput(t("message.selectedPath", { path: folder.path })); };
     folderBox.append(el("div", { class: "file-row" }, [open, pick]));
   }
   if (!folders.length) folderBox.append(el("div", { class: "muted file-empty", text: t("empty.folders") }));
@@ -1722,12 +1795,12 @@ async function loadFiles(showResult = false, pathOverride = null) {
     button.onclick = async () => {
       selectDataEntry(file.path);
       if (file.editable) await loadFileContent(file.path);
-      else showOutput(t("message.notEditable", { path: file.path }));
+      else reportOutput(t("message.notEditable", { path: file.path }));
     };
     fileBox.append(button);
   }
   if (!files.length) fileBox.append(el("div", { class: "muted file-empty", text: t("empty.files") }));
-  if (showResult) showOutput(t("message.folderLoaded", { path: result.cwd || "DATA_DIR" }));
+  if (showResult) reportOutput(t("message.folderLoaded", { path: result.cwd || "DATA_DIR" }));
 }
 function goUpFiles() {
   if (!discardFileEditorChanges()) return showOutput(t("message.folderNotChanged"));
@@ -1737,47 +1810,56 @@ function goUpFiles() {
   loadFiles(true);
 }
 async function makeFolder() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const base = $("filePath").value.trim();
   const name = $("newFolderName").value.trim();
-  if (!name) return showOutput(t("message.selectFolderName"));
+  if (!name) return reportOutput(t("message.selectFolderName"));
   const path = [base, name].filter(Boolean).join("/");
-  const result = await api(`/api/servers/${selected}/files`, { method: "POST", body: JSON.stringify({ op: "mkdir", path }) });
-  showOutput(result.message);
+  const result = await api(`/api/servers/${outputServerId}/files`, { method: "POST", body: JSON.stringify({ op: "mkdir", path }) });
+  reportOutput(result.message);
   $("newFolderName").value = "";
   await loadFiles();
 }
 async function renameEntry() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const path = selectedDataEntry();
   const name = $("renameName").value.trim();
-  if (!path || !name) return showOutput(t("message.selectRename"));
-  const result = await api(`/api/servers/${selected}/files`, { method: "POST", body: JSON.stringify({ op: "rename", path, name }) });
+  if (!path || !name) return reportOutput(t("message.selectRename"));
+  const result = await api(`/api/servers/${outputServerId}/files`, { method: "POST", body: JSON.stringify({ op: "rename", path, name }) });
   if (path === fileEditorPath) setFileEditorPath(result.path);
-  showOutput(result.message);
+  reportOutput(result.message);
   $("renameName").value = "";
   await loadFiles();
 }
 async function deleteEntry() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const path = selectedDataEntry();
   if (!path || !confirm(t("prompt.deleteEntry", { path }))) return;
-  const result = await api(`/api/servers/${selected}/files`, { method: "POST", body: JSON.stringify({ op: "delete", path }) });
+  const result = await api(`/api/servers/${outputServerId}/files`, { method: "POST", body: JSON.stringify({ op: "delete", path }) });
   if (path === fileEditorPath) {
     $("fileContent").value = "";
     setFileEditorPath("");
     setFileEditorDirty(false);
   }
-  showOutput(result.message);
+  reportOutput(result.message);
   await loadFiles();
 }
 async function uploadZip() {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const file = $("zipUpload").files[0];
-  if (!file) return showOutput(t("message.selectZip"));
-  if (!file.name.toLowerCase().endsWith(".zip")) return showOutput(t("message.selectZipType"));
+  if (!file) return reportOutput(t("message.selectZip"));
+  if (!file.name.toLowerCase().endsWith(".zip")) return reportOutput(t("message.selectZipType"));
+  const target = $("filePath").value.trim();
   const data = await file.arrayBuffer();
   let binary = "";
   new Uint8Array(data).forEach(byte => binary += String.fromCharCode(byte));
-  showOutput(t("message.zipRunning", { name: file.name }));
-  const result = await api(`/api/servers/${selected}/files`, { method: "POST", body: JSON.stringify({ op: "upload-zip", target: $("filePath").value.trim(), name: file.name, content: btoa(binary) }) });
-  showOutput(result.message);
+  reportOutput(t("message.zipRunning", { name: file.name }));
+  const result = await api(`/api/servers/${outputServerId}/files`, { method: "POST", body: JSON.stringify({ op: "upload-zip", target, name: file.name, content: btoa(binary) }) });
+  reportOutput(result.message);
   $("zipUpload").value = "";
   await loadFiles();
 }
@@ -1817,7 +1899,7 @@ async function loadPlayers(showResult = false) {
     }
     box.value = (result.players || []).includes(chosenName) ? chosenName : "";
     $("playerSummary").textContent = result.max ? `${result.online}/${result.max} online` : `${result.online ?? 0} online`;
-    if (showResult) $("result").textContent = result.raw || t("message.playersUpdated");
+    if (showResult) showOutput(result.raw || t("message.playersUpdated"), serverId);
   } catch (err) {
     if (selected === serverId && request === playerRequestSerial) $("playerSummary").textContent = t("message.playerUnavailable", { message: err.message });
   }
@@ -1921,6 +2003,8 @@ function renderItemChoices() {
   $("itemMore").hidden = matches.length <= itemResultLimit;
 }
 async function loadVersions(type, showResult = false) {
+  const outputServerId = selected;
+  const reportOutput = text => showOutput(text, outputServerId);
   const box = $("versionOptions");
   const select = $("versionSelect");
   box.innerHTML = "";
@@ -1932,9 +2016,9 @@ async function loadVersions(type, showResult = false) {
       box.append(el("option", { value: version }));
       if (select) select.append(el("option", { value: version, text: version }));
     }
-    if (showResult) showOutput(t("message.versionsLoaded", { count: result.versions.length }));
+    if (showResult) reportOutput(t("message.versionsLoaded", { count: result.versions.length }));
   } catch (err) {
-    if (showResult) showOutput(t("message.versionsFailed", { message: err.message }));
+    if (showResult) reportOutput(t("message.versionsFailed", { message: err.message }));
   }
 }
 function selectedPlayer() { return $("playerName").value.trim() || $("players").value.trim(); }
@@ -1945,12 +2029,12 @@ async function sendShortcut(kind) {
   const amount = $("giveAmount").value.trim() || "1";
   let command = "";
   if (kind === "tp") {
-    if (!player || !target) return $("result").textContent = t("message.tpNeedsPlayers");
+    if (!player || !target) return showOutput(t("message.tpNeedsPlayers"));
     command = `tp ${player} ${target}`;
   }
   if (kind === "give") {
-    if (!player || !item) return $("result").textContent = t("message.giveNeedsItem");
-    if (!/^\d+$/.test(amount) || Number(amount) < 1 || Number(amount) > 2147483647) return $("result").textContent = t("items.invalidAmount");
+    if (!player || !item) return showOutput(t("message.giveNeedsItem"));
+    if (!/^\d+$/.test(amount) || Number(amount) < 1 || Number(amount) > 2147483647) return showOutput(t("items.invalidAmount"));
     command = `give ${player} ${item} ${amount}`;
   }
   if (kind === "kick") {
@@ -2141,6 +2225,6 @@ resetScheduleForm();
 applyLanguageStatic();
 $("rconOutput").textContent = t("rcon.ready");
 const initialView = window.location.hash.slice(1) || "overview";
-loadServers().then(() => showView(initialView, false)).catch(error => $("result").textContent = error.message);
+loadServers().then(() => showView(initialView, false)).catch(error => showOutput(error.message));
 
 startServerStatusPolling();

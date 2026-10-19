@@ -6,11 +6,11 @@
 <title>Minecraft Docker WebUI</title>
 <link rel="icon" type="image/png" sizes="96x96" href="/assets/minecraft-docker-webui-spigot-icon-96.png">
 <link rel="apple-touch-icon" sizes="128x128" href="/assets/minecraft-docker-webui-icon-128.png">
-<link rel="stylesheet" href="/static/style.css?v=1.3.2">
+<link rel="stylesheet" href="/static/style.css?v=1.3.3">
 </head>
 <body>
 <header>
-  <div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><div><h1>Minecraft Docker WebUI <span class="version">v1.3.2</span></h1><span class="header-subtitle" data-i18n="app.subtitle">Server, Konsole und Automatisierung</span></div></div>
+  <div class="brand"><img class="app-icon" src="/assets/minecraft-docker-webui-spigot-icon-96.png" alt=""><div><h1>Minecraft Docker WebUI <span class="version">v1.3.3</span></h1><span class="header-subtitle" data-i18n="app.subtitle">Server, Konsole und Automatisierung</span></div></div>
   <div class="actions header-actions"><a class="github-link" href="https://github.com/JobbeDeluxe/minecraftdockerstartscript" target="_blank" rel="noopener">GitHub</a><select id="languageSelect" class="language-select" aria-label="Sprache"><option value="de">DE</option><option value="en">EN</option></select><span id="configDirty" class="warnings"></span><button id="helpButton" type="button" data-i18n="button.help">Hilfe</button></div>
 </header>
 <main>
@@ -73,11 +73,11 @@
       <div class="automation-layout"><div><div id="scheduleList" class="schedule-list"></div></div><form id="scheduleForm" class="box schedule-form"><input id="scheduleId" type="hidden"><h2 id="scheduleFormTitle" data-i18n="automation.new">Neuer Zeitplan</h2><label><span data-i18n="automation.name">Name</span><input id="scheduleName" required placeholder="Nächtlicher Neustart"></label><div class="two-column compact"><label><span data-i18n="automation.target">Ziel</span><select id="scheduleTarget"></select></label><label><span data-i18n="automation.action">Aktion</span><select id="scheduleAction"><option value="restart">Server neu starten</option><option value="plugins-restart">Plugins aktualisieren + Neustart</option><option value="backup">Backup erstellen</option><option value="plugins">Plugins aktualisieren</option><option value="start">Server starten</option><option value="stop">Server stoppen</option><option value="rcon">RCON-Befehl senden</option></select></label></div><div class="two-column compact"><label><span data-i18n="automation.time">Uhrzeit</span><input id="scheduleTime" type="time" value="03:00" required></label><label class="schedule-enabled"><span data-i18n="automation.state">Status</span><span class="checks"><label><input id="scheduleEnabled" type="checkbox" checked><span data-i18n="automation.enabled">Aktiv</span></label></span></label></div><label id="scheduleCommandRow" hidden><span data-i18n="automation.command">RCON-Befehl</span><input id="scheduleCommand" placeholder="say Server-Neustart in 5 Minuten"></label><fieldset><legend data-i18n="automation.days">Wochentage</legend><div id="scheduleDays" class="day-picker"><label><input type="checkbox" value="0" checked><span>Mo</span></label><label><input type="checkbox" value="1" checked><span>Di</span></label><label><input type="checkbox" value="2" checked><span>Mi</span></label><label><input type="checkbox" value="3" checked><span>Do</span></label><label><input type="checkbox" value="4" checked><span>Fr</span></label><label><input type="checkbox" value="5" checked><span>Sa</span></label><label><input type="checkbox" value="6" checked><span>So</span></label></div></fieldset><div class="actions"><button class="primary" type="submit" data-i18n="automation.save">Zeitplan speichern</button><button id="runSchedule" type="button" data-i18n="automation.run">Jetzt ausführen</button><button id="deleteSchedule" class="warn" type="button" data-i18n="automation.delete">Löschen</button></div><div><h3 data-i18n="automation.lastResult">Letztes Ergebnis</h3><pre id="scheduleResult" class="small-output">Noch nicht ausgeführt.</pre></div></form></div>
     </section>
 
-    <section id="activityBox" class="box activity-box"><div class="box-heading"><h2 data-i18n="activity.title">Aktionsausgabe</h2><button id="clearActivity" type="button" data-i18n="activity.clear">Leeren</button></div><pre id="result" class="activity-output"></pre></section>
+    <section id="activityBox" class="box activity-box"><div class="box-heading"><h2><span data-i18n="activity.title">Aktionsausgabe</span> <span id="activityServer" class="muted"></span></h2><button id="clearActivity" type="button" data-i18n="activity.clear">Leeren</button></div><pre id="result" class="activity-output"></pre></section>
   </section>
 </main>
 <dialog id="helpDialog"><div class="box help-box"><div class="box-heading"><h2>Hilfe</h2><button id="closeHelp" type="button" data-i18n="button.close">Schließen</button></div><pre id="helpText" class="muted"></pre></div></dialog>
 <datalist id="versionOptions"></datalist>
-<script src="/static/app.js?v=1.3.2"></script>
+<script src="/static/app.js?v=1.3.3"></script>
 </body>
 </html>

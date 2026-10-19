@@ -90,7 +90,7 @@ Wichtig: `Speichern` sichert nur das WebUI-Profil. `Anwenden` erstellt oder aktu
 Die WebUI zeigt ihre Version oben im Header an. Dieser Release-Kandidat ist:
 
 ```text
-v1.3.2
+v1.3.3
 ```
 
 Im Header gibt es ausserdem einen direkten Link zur GitHub-Projektseite.
@@ -301,7 +301,7 @@ sind bereits Teil des dann erstellten Backups. Fuer solche manuellen Eingriffe v
 Backup erstellen. Der interaktive CLI-Modus in `start_minecraft.sh` wird nicht vom WebUI-Startschutz betreut.
 
 Live-Test: WebUI-Prozess mit dem aktualisierten Code neu starten, Browser neu laden und im Header
-`v1.3.2` pruefen. Zuerst einen funktionierenden Paper-Server anwenden; die Aktion wartet auf die
+`v1.3.3` pruefen. Zuerst einen funktionierenden Paper-Server anwenden; die Aktion wartet auf die
 Startpruefung. Fehlstarts/Rollback anschliessend auf einem Testprofil durch ein inkompatibles
 Plugin-Update pruefen. Issue: [Startschutz und Fehlerprotokoll #14](https://github.com/JobbeDeluxe/minecraftdockerstartscript/issues/14).
 
@@ -346,6 +346,14 @@ Empfehlung fuer produktive Nutzung:
 - Vor groesseren Aenderungen Backup erstellen
 - Datei- und ZIP-Uploads nur vertrauenswuerdigen Admins erlauben
 
+## Aktionsausgabe
+
+Ab v1.3.3 zeigt die Aktionsausgabe den ausgewaehlten Server mit Namen. Ausgabe,
+Aktionsstatus und Aktualisierungsfehler werden je Server getrennt gehalten. Beim Wechsel
+erscheint dessen letzter Stand; Hintergrundaktionen laufen weiter. **Leeren** betrifft
+nur die Ausgabe dieses Servers. Die Zuordnung gilt fuer die aktuelle Browserseite;
+ein Neuladen setzt diese Anzeige zurueck. Das gespeicherte letzte Bootfehlerprotokoll bleibt erhalten.
+
 ## Status
 
-`v1.3.2` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.
+`v1.3.3` ist als aktueller WebUI-Teststand gedacht. Das Ziel ist eine praktische, hostinstallierte Alternative zu groesseren Panels, ohne die vorhandene Docker-Logik zu verstecken.

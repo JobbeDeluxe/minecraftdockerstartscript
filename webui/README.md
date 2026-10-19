@@ -1,8 +1,13 @@
 # Minecraft Docker WebUI
 
-Version: `v1.3.2`
+Version: `v1.3.3`
 
-Neu in v1.3.2: Alle 1.505 Katalog-Items haben ein lokal eingebettetes Icon, inklusive
+Neu in v1.3.3: Aktionsausgabe und Statusmeldungen gehoeren zum ausgewaehlten Server.
+Parallele Starts, Backups und Plugin-Updates ueberschreiben einander nicht mehr;
+beim Serverwechsel erscheint dessen letzter Stand. Verspaetete Fortschrittsantworten
+koennen das Endergebnis nicht mehr ersetzen. Die Ausgabe bleibt bis zum Neuladen der Seite erhalten.
+
+Seit v1.3.2: Alle 1.505 Katalog-Items haben ein lokal eingebettetes Icon, inklusive
 Regalen, Kupfergittern und Blasseichenzaun. Der Generator verhindert unvollstaendige Updates.
 
 Seit v1.3.1: Spielerauswahl uebernimmt den Namen ins Empfaengerfeld, mit Kopierbutton

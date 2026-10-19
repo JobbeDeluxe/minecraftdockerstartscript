@@ -232,3 +232,121 @@ test('catalog search supports German, English, IDs and umlauts', () => {
   assert.equal(context.matchingItems(example, 'gluck').length, 1);
   assert.equal(context.matchingItems(example, 'not-an-item').length, 0);
 });
+
+function deferred() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+function concurrentActivityContext() {
+  const nodes = Object.fromEntries(['result', 'actionStatus', 'refreshStatus', 'activityServer'].map(id =>
+    [id, { textContent: '', hidden: true, scrollHeight: 100, scrollTop: 0 }]));
+  const timers = new Map(), requests = [];
+  let timerId = 0;
+  const context = vm.createContext({
+    selected: 'a', configDirty: false, pluginsDirty: false, serverActivity: new Map(),
+    servers: ['a', 'b', 'c'].map(id => ({ id, name: `Server ${id}` })),
+    $: id => nodes[id], t: (key, values = {}) => `${key} ${values.message || ''}`.trim(),
+    liveActionLogActions: new Set(['start', 'backup', 'restart']), actionLabel: value => value,
+    translateWarning: value => value, confirm: () => false,
+    setInterval: callback => { timers.set(++timerId, callback); return timerId; },
+    clearInterval: id => timers.delete(id),
+    loadServers: async () => {}, refreshServerStatuses: async () => {},
+    loadManualPlugins: async () => {}, loadInstalledPlugins: async () => {}, loadBootLog: async () => {},
+    api: (url, options) => {
+      const request = { url, options, ...deferred() };
+      requests.push(request);
+      return request.promise;
+    },
+  });
+  vm.runInContext(extract('function activityFor(', 'function waitPaint()'), context);
+  vm.runInContext(extract('async function runProfileAction(', 'document.querySelectorAll("[data-action]")'), context);
+  vm.runInContext(extract('async function updatePlugins()', '$("saveProperties").onclick'), context);
+  return { context, nodes, timers, requests };
+}
+const success = stdout => ({ ok: true, code: 0, stdout, stderr: '' });
+
+test('three parallel actions retain separate output and status across server switches', async () => {
+  const { context: c, nodes, timers, requests } = concurrentActivityContext();
+  const actions = ['a', 'b', 'c'].map(id => c.runProfileAction('start', id));
+  c.selected = 'b'; c.renderActivity();
+  const polls = [...timers.values()].map(poll => poll());
+  requests.filter(r => r.url.endsWith('/action-log')).forEach(r =>
+    r.resolve({ content: `progress ${r.url.split('/')[3]}` }));
+  await Promise.all(polls);
+  assert.match(nodes.result.textContent, /progress b/);
+  assert.equal(nodes.activityServer.textContent, 'Server b');
+  requests[0].resolve(success('A complete'));
+  requests[2].resolve({ ok: false, code: 1, stdout: '', stderr: 'C failed' });
+  await Promise.all([actions[0], actions[2]]);
+  assert.match(nodes.result.textContent, /progress b/);
+  assert.equal(nodes.actionStatus.className, 'action-status info');
+  c.selected = 'a'; c.renderActivity();
+  assert.match(nodes.result.textContent, /A complete/);
+  assert.equal(nodes.actionStatus.className, 'action-status success');
+  c.selected = 'c'; c.renderActivity();
+  assert.match(nodes.result.textContent, /C failed/);
+  assert.equal(nodes.actionStatus.className, 'action-status error');
+  requests[1].resolve(success('B complete')); await actions[1];
+  assert.match(nodes.result.textContent, /C failed/);
+  c.selected = 'b'; c.renderActivity();
+  assert.match(nodes.result.textContent, /B complete/);
+  assert.equal(timers.size, 0);
+});
+
+test('late action log cannot replace completion and slow polls do not overlap', async () => {
+  const { context: c, nodes, timers, requests } = concurrentActivityContext();
+  const action = c.runProfileAction('start');
+  const poll = [...timers.values()][0];
+  const pending = poll(); await poll();
+  assert.equal(requests.length, 2);
+  requests[0].resolve(success('final output')); await action;
+  requests[1].resolve({ content: 'old progress' }); await pending;
+  assert.match(nodes.result.textContent, /final output/);
+  assert.doesNotMatch(nodes.result.textContent, /old progress/);
+});
+
+test('background plugin failure keeps its own output without borrowing the visible server text', async () => {
+  const { context: c, nodes, timers, requests } = concurrentActivityContext();
+  const action = c.updatePlugins();
+  c.selected = 'b'; c.showOutput('B stays visible');
+  const pending = [...timers.values()][0]();
+  requests[0].resolve({ ok: false, code: 1, stdout: 'A plugin error', stderr: '' });
+  await action;
+  requests[1].resolve({ content: 'stale A progress' }); await pending;
+  assert.equal(nodes.result.textContent, 'B stays visible');
+  c.selected = 'a'; c.renderActivity();
+  assert.match(nodes.result.textContent, /A plugin error/);
+  assert.match(nodes.result.textContent, /message.pluginUpdateFailed/);
+  assert.doesNotMatch(nodes.result.textContent, /B stays visible|stale A progress/);
+});
+
+test('refresh failures and clear output belong only to the selected server', async () => {
+  const { context: c, nodes, requests } = concurrentActivityContext();
+  c.loadServers = async () => { throw new Error('refresh unavailable'); };
+  const action = c.runProfileAction('start');
+  c.selected = 'b'; c.showOutput('B output');
+  requests[0].resolve(success('A output')); await action;
+  assert.equal(nodes.refreshStatus.hidden, true);
+  c.showOutput('');
+  c.selected = 'a'; c.renderActivity();
+  assert.match(nodes.result.textContent, /A output/);
+  assert.match(nodes.refreshStatus.textContent, /refresh unavailable/);
+  c.selected = 'b'; c.renderActivity();
+  assert.equal(nodes.result.textContent, '');
+  assert.equal(nodes.refreshStatus.hidden, true);
+});
+
+test('saving a dirty profile during start cannot steal selection or change action target', async () => {
+  const { context: c, nodes, requests } = concurrentActivityContext();
+  c.configDirty = true; c.formData = () => ({ id: 'a' }); c.setConfigDirty = () => {};
+  vm.runInContext(extract('async function saveCurrentProfile()', 'async function reloadCurrentProfile()'), c);
+  const action = c.runProfileAction('start');
+  c.selected = 'b'; c.showOutput('B output');
+  requests[0].resolve({ id: 'a' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(c.selected, 'b');
+  assert.equal(requests[1].url, '/api/servers/a/action');
+  requests[1].resolve(success('A started')); await action;
+  assert.equal(nodes.result.textContent, 'B output');
+});
